@@ -1,0 +1,5 @@
+FileVersion = 1
+Projects = {Dimtoo = {Path = "."}, Pile = {Path = "../Pile/Pile"}, Pile_Audio_Null = {Path = "../Pile/Implementations/Audio_Null"}}
+
+[Workspace]
+StartupProject = "Dimtoo"
