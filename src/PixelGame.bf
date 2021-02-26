@@ -15,13 +15,15 @@ namespace Dimtoo
 		public readonly UPoint2 FrameSize;
 		[Inline]
 		public FrameBuffer Frame => frame;
+		[Inline]
+		public float FrameScale => renderScale;
 		public ScalingMode Scaling = .PixelPerfect;
 
 		FrameBuffer frame ~ delete _;
 		float renderScale;
 		Point2 frameOffset;
 
-		public this(UPoint2 size) : base()
+		public this(UPoint2 size)
 		{
 			FrameSize = size;
 		}
@@ -73,6 +75,19 @@ namespace Dimtoo
 		    let framePos = (Vector2)windowPosition / renderScale;
 
 		    return framePos.Round();
+		}
+
+		public Point2 FrameToWindow(Point2 framePosition)
+		{
+			var framePosition;
+
+			// Make position relative to frame buffer origin
+			var windowPos = (Vector2)framePosition * renderScale;
+
+			// Take into account Frame to Window Origin offset
+			windowPos += frameOffset;
+
+			return windowPos.Round();
 		}
 	}
 }

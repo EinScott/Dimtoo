@@ -14,6 +14,7 @@ namespace Dimtoo
 		EntityID next;
 
 		List<List<ComponentBase>> componentsByType = new .();
+		//List<List<ComponentBase>> activeComponentsByType = new .(); // @do hook up update loop & priority
 
 		// Components keep a linked list to the other components. The component is the start of that list
 		Dictionary<EntityID, ComponentBase> componentsByEntity = new .() ~ delete _;
@@ -21,9 +22,7 @@ namespace Dimtoo
 		// @do not sure if this and update() is going to be here or in overrider?
 		// probably here!
 		List<ComponentBase> render;
-		List<ComponentBase> update;
 		List<int> renderTypeStartIndeces; // (maybe layers instead) used to insert stuff later
-		List<int> updateTypeStartIndeces; // used to insert stuff later
 
 		public this()
 		{
@@ -81,14 +80,18 @@ namespace Dimtoo
 			}
 		}
 
-		[Inline]
 		/// If the entity is valid and has any components on it
-		public bool EntityInUse(Entity entity) => Valid(entity) && componentsByEntity.ContainsKey(entity.ID);
+		mixin EntityInUse(Entity entity)
+		{
+			Debug.Assert(Valid(entity));
+			if (!componentsByEntity.ContainsKey(entity.ID))
+				return .Err(default);
+		}
 
 		[Inline]
-		protected internal ComponentBase GetFirstComponentOnEntity(Entity entity)
+		protected internal Result<ComponentBase> GetFirstComponentOnEntity(Entity entity)
 		{
-			Debug.Assert(EntityInUse(entity));
+			EntityInUse!(entity);
 			return componentsByEntity[entity.ID];
 		}
 
@@ -99,6 +102,7 @@ namespace Dimtoo
 			Debug.Assert(Valid(entity));
 
 			// Register in lists
+			Debug.Assert(component.Meta & .Registered > 0); // Component must be registered
 			componentsByType[component.Type].Add(component);
 
 			if (!componentsByEntity.ContainsKey(entity.ID))
@@ -132,6 +136,7 @@ namespace Dimtoo
 			OnDestroyComponent(component);
 
 			// Remove from lists
+			Debug.Assert(component.Meta & .Registered > 0); // Component must be registered
 			Debug.Assert(componentsByType[component.Type].Remove(component));
 
 			if (entityListClean)
@@ -167,6 +172,38 @@ namespace Dimtoo
 		}
 		[Inline]
 		protected virtual void OnDestroyComponent(ComponentBase component) {}
+
+		public struct ComponentEnumerator<T> : IEnumerator<T>, IResettable where T : ComponentBase
+		{
+			// @do This has the same problem that ids do not necessarily work well with inheritance
+
+			ComponentBase current = null;
+			Scene Scene;
+			int Type;
+
+			public this(Scene scene)
+			{
+				Scene = scene;
+				let index = ComponentBase.RealTypeByComponentType.IndexOf(typeof(T));
+				/*Debug.Assert(index >= 0, "C");*/
+				Type = index;
+			}
+
+			public Result<T> GetNext() mut
+			{
+				if (Type < 0)
+					return .Err; // Component type not registered
+
+				//Scene.componentsByType[Type].GetEnumerator()
+
+				return (T)current;
+			}
+
+			public void Reset() mut
+			{
+				current = null;
+			}
+		}
 
 		// virtual void SortRenderOrder -- overrideable?
 		// virtual functions for update and render order computations

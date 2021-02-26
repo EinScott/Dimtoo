@@ -37,31 +37,50 @@ namespace Dimtoo
 			Scene.DestroyComponent(component);
 		}
 
-		public T GetComponent<T>() where T : ComponentBase
+		public Result<T> GetComponent<T>() where T : ComponentBase
 		{
-			return null;
+			ComponentBase current = Try!(Scene.GetFirstComponentOnEntity(this));
+
+			// Iterate until current is of requested type
+			while (!current is T)
+			{
+				if (current.nextOnEntity == null)
+					return .Err;
+
+				current = current.nextOnEntity;
+			}
+
+			return (T)current;
 		}
 
 		public void GetComponents<T>(List<T> into) where T : ComponentBase
 		{
-
+			for (let comp in EnumerateComponents<T>())
+				into.Add(comp);
 		}
 
 		public void GetComponents<T>(Span<T> into) where T : ComponentBase
 		{
+			int slot = 0;
+			for (let comp in EnumerateComponents<T>())
+			{
+				if (slot >= into.Length)
+					break;
 
+				into[slot++] = comp;
+			}
 		}
 
 		[Inline]
 		public ComponentEnumerator<T> EnumerateComponents<T>() where T : ComponentBase
 		{
 			return .(this);
-		}	
+		}
 
 		public struct ComponentEnumerator<T> : IEnumerator<T>, IResettable where T : ComponentBase
 		{
 			Entity Entity;
-			T current = null;
+			ComponentBase current = null;
 
 			public this(Entity entity)
 			{
@@ -70,23 +89,32 @@ namespace Dimtoo
 
 			public Result<T> GetNext() mut
 			{
-				// @do lookup id for typeof t, then look if the component looked at has that TypeID
-				// to see if we can (unsafe cast) it to T
-				// the function for finding the first of type T in that list should be separate, since
-				// GetComponent(s) etc also needs the same thing
-				/*if (current == null)
+				if (current == null)
 				{
-					// Set first
-					current = 
+					// Set first, will return err if entity doesn't have any components
+					current = Try!(Entity.Scene.GetFirstComponentOnEntity(Entity));
 				}
 				else if (current.nextOnEntity != null)
 				{
 					// Set next
-					//current = current.nextOnEntity;
+					current = current.nextOnEntity;
 				}
-				else return .Err;*/
+				else return .Err;
 
-				return current;
+				// Iterate until current is of requested type
+				//Type currentType = current.GetType();
+
+				//while (currentType != typeof(T) || !currentType.IsSubtypeOf(typeof(T)))
+				while (!current is T)
+				{
+					if (current.nextOnEntity == null)
+						return .Err;
+
+					current = current.nextOnEntity;
+					//currentType = current.GetType();
+				}
+
+				return (T)current;
 			}
 
 			public void Reset() mut

@@ -12,7 +12,8 @@ namespace Dimtoo
 	enum ComponentMeta : uint8
 	{
 		None = 0,
-		Update = 1,
+		Registered = 1,
+		Update = _ << 1,
 		Render = _ << 1
 	}
 
@@ -27,7 +28,7 @@ namespace Dimtoo
 				Runtime.FatalError("Components must inherit from Component<T> where T is the inheritor");
 
 			// Compute meta
-			ComponentMeta meta = .None;
+			ComponentMeta meta = .Registered;
 			for (let t in type.Interfaces)
 			{
 				if ((Type)t == typeof(IUpdate))
