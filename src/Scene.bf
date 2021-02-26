@@ -7,6 +7,8 @@ using internal Dimtoo;
 
 namespace Dimtoo
 {
+	// maybe this lib should actually be split into multiple namespaces
+
 	// @do pool components at some point?
 
 	class Scene

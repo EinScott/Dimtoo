@@ -34,19 +34,28 @@ namespace Dimtoo
 			{
 			case .PixelPerfect:
 				// Update render scale to biggest pixel perfect match
-				renderScale = (uint)Math.Max(Math.Min(
-				        Math.Floor(Core.Window.RenderSize.X / (float)frame.RenderSize.X),
-				        Math.Floor(Core.Window.RenderSize.Y / (float)frame.RenderSize.Y)), 1);
+				renderScale = Math.Max(Math.Min(
+				    Math.Floor(Core.Window.RenderSize.X / (float)frame.RenderSize.X),
+				    Math.Floor(Core.Window.RenderSize.Y / (float)frame.RenderSize.Y)), 1);
 
-				// Update frame offset to be centered
-				frameOffset = Point2(
-				    (int)((Core.Window.RenderSize.X - renderScale * frame.RenderSize.X) / 2),
-				    (int)((Core.Window.RenderSize.Y - renderScale * frame.RenderSize.Y) / 2));
 			case .FitFrame:
-				Core.FatalError("Not implemented"); // TODO non perfect pixel scaling
+				// Update render scale to biggest full-fitting match
+				renderScale = Math.Max(Math.Min(
+					Core.Window.RenderSize.X / (float)frame.RenderSize.X,
+					Core.Window.RenderSize.Y / (float)frame.RenderSize.Y), 1);
+
 			case .FillWindow:
-				Core.FatalError("Not implemented"); // TODO non perfect pixel scaling
+				// Update render scale to window-filling match
+				renderScale = Math.Max(Math.Max(
+					Core.Window.RenderSize.X / (float)frame.RenderSize.X,
+					Core.Window.RenderSize.Y / (float)frame.RenderSize.Y), 1);
+
 			}
+
+			// Update frame offset to be centered
+			frameOffset = Point2(
+			    (int)((Core.Window.RenderSize.X - renderScale * frame.RenderSize.X) / 2),
+			    (int)((Core.Window.RenderSize.Y - renderScale * frame.RenderSize.Y) / 2));
 		}
 
 		protected override void Startup()
