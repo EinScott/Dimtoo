@@ -7,6 +7,23 @@ using internal Dimtoo;
 
 namespace Dimtoo
 {
+	/**
+	PLAN:
+	- scene - entity stuff, pooling?
+	- core dimension unspecific (name-spaces/versions for both?)
+	- save state infrastructure/serialization
+	- look at Pile c# lib and port some (ui?)
+	- networking layer?
+	- fitting for bigger sprites (non-pixel perfect) - support this better
+
+	DIM specific
+	- collision detection? or at least bindings for buttet/box2d?
+	- lighting/shadows?
+	- animations?
+	- camera should move here?
+
+	*/
+
 	// maybe this lib should actually be split into multiple namespaces
 
 	// @do pool components at some point?

@@ -35,27 +35,27 @@ namespace Dimtoo
 			case .PixelPerfect:
 				// Update render scale to biggest pixel perfect match
 				renderScale = Math.Max(Math.Min(
-				    Math.Floor(Core.Window.RenderSize.X / (float)frame.RenderSize.X),
-				    Math.Floor(Core.Window.RenderSize.Y / (float)frame.RenderSize.Y)), 1);
+				    Math.Floor(System.Window.RenderSize.X / (float)frame.RenderSize.X),
+				    Math.Floor(System.Window.RenderSize.Y / (float)frame.RenderSize.Y)), 1);
 
 			case .FitFrame:
 				// Update render scale to biggest full-fitting match
 				renderScale = Math.Max(Math.Min(
-					Core.Window.RenderSize.X / (float)frame.RenderSize.X,
-					Core.Window.RenderSize.Y / (float)frame.RenderSize.Y), 1);
+					System.Window.RenderSize.X / (float)frame.RenderSize.X,
+					System.Window.RenderSize.Y / (float)frame.RenderSize.Y), 1);
 
 			case .FillWindow:
 				// Update render scale to window-filling match
 				renderScale = Math.Max(Math.Max(
-					Core.Window.RenderSize.X / (float)frame.RenderSize.X,
-					Core.Window.RenderSize.Y / (float)frame.RenderSize.Y), 1);
+					System.Window.RenderSize.X / (float)frame.RenderSize.X,
+					System.Window.RenderSize.Y / (float)frame.RenderSize.Y), 1);
 
 			}
 
 			// Update frame offset to be centered
 			frameOffset = Point2(
-			    (int)((Core.Window.RenderSize.X - renderScale * frame.RenderSize.X) / 2),
-			    (int)((Core.Window.RenderSize.Y - renderScale * frame.RenderSize.Y) / 2));
+			    (int)((System.Window.RenderSize.X - renderScale * frame.RenderSize.X) / 2),
+			    (int)((System.Window.RenderSize.Y - renderScale * frame.RenderSize.Y) / 2));
 		}
 
 		protected override void Startup()
@@ -63,8 +63,8 @@ namespace Dimtoo
 			frame = new FrameBuffer((.)FrameSize.X, (.)FrameSize.Y, .Color);
 
 			//Core.Window.Resizable = true; (i guess you should still decide this yourself)
-			Core.Window.OnResized.Add(new => Resized);
-			Core.Window.MinSize = FrameSize;
+			System.Window.OnResized.Add(new => Resized);
+			System.Window.MinSize = FrameSize;
 			Resized();
 		}
 
