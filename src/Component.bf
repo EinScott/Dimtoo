@@ -1,95 +1,84 @@
 using System;
-using System.Reflection;
 using System.Collections;
-using System.Diagnostics;
-using Pile;
-
-using internal Dimtoo;
 
 namespace Dimtoo
 {
-	// Static meta data
-	enum ComponentMeta : uint8
+	[Reflect(.Type),StaticInitPriority(-1)]
+	abstract class Component
 	{
-		None = 0,
-		Registered = 1,
-		Update = _ << 1,
-		Render = _ << 1
-	}
+		static List<Type> updateParticipants = new .() ~ delete _;
+		static List<Type> renderParticipants = new .() ~ delete _;
 
-	// @do incorporate update priority!
-	[AttributeUsage(.Class,.DisallowAllowMultiple|.NotInherited,ReflectUser=.None)]
-	struct RegisterComponentAttribute : Attribute, IComptimeTypeApply
-	{
-		[Comptime]
-		public void ApplyToType(Type type)
+		static this()
 		{
-			if(!type.IsSubtypeOf(typeof(ComponentBase)))
-				Runtime.FatalError("Components must inherit from Component<T> where T is the inheritor");
+			List<int> priorities = scope .();
 
-			// Compute meta
-			ComponentMeta meta = .Registered;
-			for (let t in type.Interfaces)
+			// Reflection magic
+			for (let type in Type.Types)
 			{
-				if ((Type)t == typeof(IUpdate))
-					meta |= .Update;
+				if (!type.IsObject || type.IsBoxed || type.IsArray || !type.IsSubtypeOf(typeof(Component)) || type == typeof(Component))
+					continue;
 
-				if ((Type)t == typeof(IRender))
-					meta |= .Render;
+				var it = type;
+				var hasUpdate = false, hasRender = false, hasPriority = false, updatePriority = 0;
+				while (true)
+				{
+					if (!hasUpdate && it.HasCustomAttribute<UpdateAttribute>())
+						hasUpdate = true;
+
+					if (!hasRender && it.HasCustomAttribute<RenderAttribute>())
+						hasRender = true;
+
+					if (!hasPriority && type.GetCustomAttribute<PriorityAttribute>() case .Ok(let val))
+					{
+						updatePriority = val.updatePriority;
+						hasPriority = true; // Only take the one further up the inheritance tree
+					}
+
+					if (it.BaseType == typeof(Component))
+						break;
+
+					it = it.BaseType;
+				}
+
+				if (hasUpdate)
+				{
+					var insert = 0;
+					if (priorities.Count == 0)
+						priorities.Add(updatePriority);
+					else
+					{
+						if (updatePriority < priorities.Back)
+						{
+							for (let pri in priorities)
+							{
+								if (updatePriority > pri)
+									break;
+								insert++;
+							}
+						}
+						else
+						{
+							insert = priorities.Count;
+							priorities.Add(updatePriority);
+						}
+					}
+
+					updateParticipants.Insert(insert, type);
+				}
+
+				if (hasRender)
+					renderParticipants.Add(type);
 			}
-
-			Compiler.EmitTypeBody(type, scope $"""
-				static this
-				{{
-					Self.[Friend]meta = (ComponentMeta){meta.Underlying};
-				}}
-				""");
-		}
-	}
-
-	typealias ComponentType = uint32;
-
-	abstract class ComponentBase
-	{
-		// ComponentType is the index to the Type that registered it
-		internal static List<Type> RealTypeByComponentType = new List<Type>() ~ delete _;
-
-		internal static ComponentType RegisterComponentType(Type type)
-		{
-			if (RealTypeByComponentType.Contains(type))
-				Runtime.FatalError("Every component type can only be registered once");
-
-			RealTypeByComponentType.Add(type);
-			return (ComponentType)RealTypeByComponentType.Count - 1;
 		}
 
-		internal ComponentBase nextOnEntity;
+		internal Component nextOnEntity;
 
-		public abstract ComponentMeta Meta { get; }
-		public abstract ComponentType Type { get; }
+		public ref Entity Entity { [Inline]get; internal set; }
 
-		public Entity Entity { get; internal set; }
+		protected virtual void Attach() {}
 
-		protected virtual void Created() {}
-		protected virtual void Destroyed() {}
+		protected virtual void Update() {}
+		protected virtual void Render() {}
 	}
-
-	class Component<T> : ComponentBase where T : ComponentBase, new
-	{
-		static readonly ComponentMeta meta;
-		static readonly ComponentType type = RegisterComponentType(typeof(Self));
-
-		public override ComponentType Type => type;
-		public override ComponentMeta Meta => meta;
-	}
-
-	interface IUpdate
-	{
-		public void Update();
-	}
-
-	interface IRender
-	{
-		public void Render();
-	}	
 }

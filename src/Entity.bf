@@ -1,22 +1,17 @@
 using System;
 using System.Collections;
+using System.Diagnostics;
 
 using internal Dimtoo;
 
 namespace Dimtoo
 {
-	typealias EntityID = uint32;
-
-	struct Entity
+	struct Entity : IEnumerable<Component>
 	{
-		public static readonly Entity Invalid = .(0, null);
-		// @do enabled on components as well as SetEnabled here, which sets another
-		// also needs to notify scene
+		internal readonly uint32 ID;
+		internal readonly Scene Scene;
 
-		public readonly EntityID ID;
-		public readonly Scene Scene;
-
-		internal this(EntityID id, Scene scene)
+		internal this(uint32 id, Scene scene)
 		{
 			ID = id;
 			Scene = scene;
@@ -26,95 +21,71 @@ namespace Dimtoo
 		public void Destroy() => Scene.DestroyEntity(this);
 
 		[Inline]
-		public T CreateComponent<T>() where T : ComponentBase, new
+		public T CreateComponent<T>() where T : Component, new
 		{
-			return Scene.CreateComponent(.. new T(), this);
+			return Scene.CreateComponent<T>(this);
 		}
 
 		[Inline]
-		public void DestroyComponent(ComponentBase component)
+		public void DestroyComponent(Component component)
 		{
+#if DEBUG
+			bool contained = false;
+			for (let comp in this)
+				if (comp == component)
+				{
+					contained = true;
+					break;
+				}
+
+			if (!contained)
+				Debug.FatalError("Destroying component on entity that doesn't own it");
+#endif
+
 			Scene.DestroyComponent(component);
 		}
 
-		public Result<T> GetComponent<T>() where T : ComponentBase
+		// get components
+
+		public Result<T> GetComponent<T>() where T : Component
 		{
-			ComponentBase current = Try!(Scene.GetFirstComponentOnEntity(this));
-
-			// Iterate until current is of requested type
-			while (!current is T)
-			{
-				if (current.nextOnEntity == null)
-					return .Err;
-
-				current = current.nextOnEntity;
-			}
-
-			return (T)current;
-		}
-
-		public void GetComponents<T>(List<T> into) where T : ComponentBase
-		{
-			for (let comp in EnumerateComponents<T>())
-				into.Add(comp);
-		}
-
-		public void GetComponents<T>(Span<T> into) where T : ComponentBase
-		{
-			int slot = 0;
-			for (let comp in EnumerateComponents<T>())
-			{
-				if (slot >= into.Length)
-					break;
-
-				into[slot++] = comp;
-			}
+			return ComponentEnumerator<T>(this).GetNext();
 		}
 
 		[Inline]
-		public ComponentEnumerator<T> EnumerateComponents<T>() where T : ComponentBase
+		public ComponentEnumerator<T> GetTEnumerator<T>() where T : Component
 		{
 			return .(this);
 		}
 
-		public struct ComponentEnumerator<T> : IEnumerator<T>, IResettable where T : ComponentBase
-		{
-			Entity Entity;
-			ComponentBase current = null;
+		[Inline]
+		public ComponentEnumerator GetEnumerator() => .(this);
 
-			public this(Entity entity)
+		public struct ComponentEnumerator : IEnumerator<Component>, IResettable
+		{
+			Entity entity;
+			Component current = null;
+
+			public this(Entity e)
 			{
-				Entity = entity;
+				entity = e;
 			}
 
-			public Result<T> GetNext() mut
+			public Result<Component> GetNext() mut
 			{
-				if (current == null)
+				if (current != null)
 				{
-					// Set first, will return err if entity doesn't have any components
-					current = Try!(Entity.Scene.GetFirstComponentOnEntity(Entity));
+					if (current.nextOnEntity != null) // Next in list
+						current = current.nextOnEntity;
+					else return .Err; // End of list
 				}
-				else if (current.nextOnEntity != null)
+				else // Start of potential list
 				{
-					// Set next
-					current = current.nextOnEntity;
-				}
-				else return .Err;
-
-				// Iterate until current is of requested type
-				//Type currentType = current.GetType();
-
-				//while (currentType != typeof(T) || !currentType.IsSubtypeOf(typeof(T)))
-				while (!current is T)
-				{
-					if (current.nextOnEntity == null)
+					if (!entity.Scene.componentsByEntity.TryGetValue(entity, out current))
 						return .Err;
-
-					current = current.nextOnEntity;
-					//currentType = current.GetType();
 				}
 
-				return (T)current;
+				return current;
 			}
 
 			public void Reset() mut
@@ -123,7 +94,55 @@ namespace Dimtoo
 			}
 		}
 
+		public struct ComponentEnumerator<T> : IEnumerator<T>, IResettable where T : Component
+		{
+			Entity entity;
+			T current = null;
+
+			public this(Entity e)
+			{
+				entity = e;
+			}
+
+			[Inline]
+			public T Current => current;
+
+			public Result<T> GetNext() mut
+			{
+				Component it = current;
+
+				if (it != null)
+				{
+					if (it.nextOnEntity != null) // Next in list
+						it = it.nextOnEntity;
+					else return .Err; // End of list
+				}
+				else // Start of potential list
+				{
+					if (!entity.Scene.componentsByEntity.TryGetValue(entity, out it))
+						return .Err;
+				}
+
+				while (!(it is T))
+				{
+					if (it.nextOnEntity == null)
+						return .Err;
+
+					it = it.nextOnEntity;
+				}
+
+				return current = (T)it;
+			}
+
+			public void Reset() mut
+			{
+				current = null;
+			}
+		}
+
+		[Inline]
+		public static implicit operator uint32(Entity e) => e.ID;
 		[Commutable]
-		public static bool operator==(Entity a, Entity b) => a.ID == b.ID && a.Scene == b.Scene;
+		public static bool operator==(Entity a, Entity b) => a.ID == b.ID && a.Scene === b.Scene;
 	}
 }

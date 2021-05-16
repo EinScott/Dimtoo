@@ -7,59 +7,55 @@ using internal Dimtoo;
 
 namespace Dimtoo
 {
-	/**
-	PLAN:
-	- scene - entity stuff, pooling?
-	- core dimension unspecific (name-spaces/versions for both?)
-	- save state infrastructure/serialization
-	- look at Pile c# lib and port some (ui?)
-	- networking layer?
-	- fitting for bigger sprites (non-pixel perfect) - support this better
-
-	DIM specific
-	- collision detection? or at least bindings for buttet/box2d?
-	- lighting/shadows?
-	- animations?
-	- camera should move here?
-
-	*/
-
-	// maybe this lib should actually be split into multiple namespaces
-
-	// @do pool components at some point?
+	[AttributeUsage(.Class, .ReflectAttribute|.DisallowAllowMultiple)]
+	struct UpdateAttribute : Attribute {}
+	[AttributeUsage(.Class, .ReflectAttribute|.DisallowAllowMultiple)]
+	struct RenderAttribute : Attribute {}
+	[AttributeUsage(.Class, .ReflectAttribute|.DisallowAllowMultiple)]
+	struct PriorityAttribute : Attribute, this(int updatePriority);
+	/*[AttributeUsage(.Class)]
+	struct RequireAttribute<T> : Attribute where T : ComponentBase
+	{
+		public const Type Required = typeof(T);
+	}*/
 
 	class Scene
 	{
-		EntityID next;
-
-		List<List<ComponentBase>> componentsByType = new .();
-		//List<List<ComponentBase>> activeComponentsByType = new .(); // @do hook up update loop & priority
-
-		// Components keep a linked list to the other components. The component is the start of that list
-		Dictionary<EntityID, ComponentBase> componentsByEntity = new .() ~ delete _;
-
-		// @do not sure if this and update() is going to be here or in overrider?
-		// probably here!
-		List<ComponentBase> render;
-		List<int> renderTypeStartIndeces; // (maybe layers instead) used to insert stuff later
-
-		public this()
+		public abstract class System
 		{
-			// Lists for all component types
-			for (let i < ComponentBase.RealTypeByComponentType.Count)
-				componentsByType.Add(new .());
+			// For things acting on multiple components/entities, like collision, which is not really owned by a system
+			// these should get callbacks for all the common actions
+			// but also, these are characteristically not really accessed by the outside
 		}
+
+		BumpAllocator alloc = new .() ~ delete _;
+
+		uint32 next = 1;
+		Dictionary<Type, List<Component>> componentsByType = new .();
+		internal Dictionary<uint32, Component> componentsByEntity = new .() ~ delete _; // ComponentBase has linked list
 
 		public ~this()
 		{
-			for (let coll in componentsByType)
-				DeleteContainerAndItems!(coll);
+			for (let list in componentsByType.Values)
+			{
+				for (var value in list)
+					delete:alloc value;
+				delete list;
+			}	
 
 			delete componentsByType;
 		}
 
+		// get entities by tag, get components by attribute, get components by type, get components by entity
+		// components are allocated and deleted only by this thing!
+		// do get()s lookups respect inheritance? because they probably should
+
+		// enable disable on entity and component layer
+
 		[Inline]
-		internal bool Valid(Entity e) => e.ID < next && e.Scene == this;
+		bool Valid(Entity e) => e.ID != default && e.Scene == this && e.ID < next;
+		[Inline]
+		bool InUse(Entity e) => Valid(e) && componentsByEntity.ContainsKey(e);
 
 		public Entity CreateEntity()
 		{
@@ -67,164 +63,104 @@ namespace Dimtoo
 			OnCreateEntity(ent);
 			return ent;
 		}
-
-		public Entity CreateEntityWith<T>() where T : ComponentBase, new
+		public Entity CreateEntityWith<T>() where T : Component, new
 		{
 			let ent = Entity(next++, this);
 			OnCreateEntity(ent);
-			CreateComponent(new T(), ent);
+			CreateComponent<T>(ent);
 
 			return ent;
 		}
 		[Inline]
-		public virtual void OnCreateEntity(Entity entity) {}
+		protected virtual void OnCreateEntity(Entity e) {}
 
-		public void DestroyEntity(Entity entity)
+		public void DestroyEntity(Entity e)
 		{
-			Debug.Assert(Valid(entity));
+			Debug.Assert(InUse(e));
 
-			if (componentsByEntity.TryGetValue(entity.ID, var itComp))
+			if (componentsByEntity.TryGetValue(e, var itComp))
 			{
-				// Remove from dict
-				componentsByEntity.Remove(entity.ID);
+				// Remove whole entry
+				componentsByEntity.Remove(e);
 
-				// Destroy whole list
+				// Destroy all components
 				while (itComp.nextOnEntity != null)
 				{
-					let component = itComp;
+					let comp = itComp;
 					itComp = itComp.nextOnEntity;
 
-					DestroyComponent(component, false);
+					DestroyComponent(comp, false);
 				}
 			}
 		}
 
-		/// If the entity is valid and has any components on it
-		mixin EntityInUse(Entity entity)
+		protected internal T CreateComponent<T>(Entity e) where T : Component, new
 		{
-			Debug.Assert(Valid(entity));
-			if (!componentsByEntity.ContainsKey(entity.ID))
-				return .Err(default);
-		}
+			Debug.Assert(Valid(e));
+			let component = new:alloc T();
+			component.Entity = e;
 
-		[Inline]
-		protected internal Result<ComponentBase> GetFirstComponentOnEntity(Entity entity)
-		{
-			EntityInUse!(entity);
-			return componentsByEntity[entity.ID];
-		}
+			const Type type = typeof(T);
+			if (!componentsByType.ContainsKey(type))
+				componentsByType.Add(type, new .());
+			componentsByType[type].Add(component);
 
-		/// Component is expected to be a fresh, new .() one!
-		protected internal void CreateComponent(ComponentBase component, Entity entity)
-		{
-			Debug.Assert(component.Entity == .Invalid);
-			Debug.Assert(Valid(entity));
-
-			// Register in lists
-			Debug.Assert(component.Meta & .Registered > 0); // Component must be registered
-			componentsByType[component.Type].Add(component);
-
-			if (!componentsByEntity.ContainsKey(entity.ID))
-				componentsByEntity.Add(entity.ID, component);
+			if (!componentsByEntity.ContainsKey(e))
+				componentsByEntity.Add(e, component);
 			else
 			{
-				// Append
-				var itComp = componentsByEntity[entity.ID];
+				// Append to linked list
+				var itComp = componentsByEntity[e];
 				while (itComp.nextOnEntity != null)
 					itComp = itComp.nextOnEntity;
 
 				itComp.nextOnEntity = component;
 			}
 
-			// Setup component
-			component.Entity = entity;
+			OnCreateComponent(component, e);
 
-			OnCreateComponent(component, entity);
-
-			component.[Friend]Created();
+			component.[Friend]Attach();
+			return component;
 		}
 		[Inline]
-		protected virtual void OnCreateComponent(ComponentBase component, Entity entity) {}
+		protected virtual void OnCreateComponent(Component component, Entity e) {}
 
-		protected internal void DestroyComponent(ComponentBase component, bool entityListClean = true)
+		protected internal void DestroyComponent(Component component, bool maintainEntityList = true)
 		{
-			Debug.Assert(Valid(component.Entity));
-
-			component.[Friend]Destroyed();
+			Debug.Assert(InUse(component.Entity));
 
 			OnDestroyComponent(component);
 
-			// Remove from lists
-			Debug.Assert(component.Meta & .Registered > 0); // Component must be registered
-			Debug.Assert(componentsByType[component.Type].Remove(component));
+			componentsByType[component.GetType()].Remove(component);
 
-			if (entityListClean)
+			if (maintainEntityList)
 			{
-				Debug.Assert(componentsByEntity.TryGetValue(component.Entity.ID, var itComp));
-				bool lastComp = true;
-				bool removed = false;
-				while (itComp.nextOnEntity != null)
+				Debug.Assert(componentsByEntity.TryGetValue(component.Entity, var itComp));
+
+				if (itComp.nextOnEntity == null)
+					componentsByEntity.Remove(component.Entity);
+				else
 				{
-					if (itComp.nextOnEntity == component)
+					bool removed = false;
+					while (itComp.nextOnEntity != null)
 					{
-						let afterComp = itComp.nextOnEntity.nextOnEntity; // This might be null an that's fine
+						if (itComp.nextOnEntity == component)
+						{
+							itComp.nextOnEntity = itComp.nextOnEntity.nextOnEntity; // This might be null and that's fine
 
-						// The next is out component, remove it from the list by referencing the thing after ours
-						itComp.nextOnEntity = afterComp;
+							removed = true;
+							break;
+						}
 
-						removed = true;
-						break;
+						itComp = itComp.nextOnEntity;
 					}
-
-					lastComp = false;
-					itComp = itComp.nextOnEntity;
+					Debug.Assert(removed);
 				}
-				Debug.Assert(removed);
-
-				// Remove from dict if this was the only remaining component
-				if (lastComp)
-					componentsByEntity.Remove(component.Entity.ID);
 			}
 
-			// Delete component
-			delete component;
+			delete:alloc component;
 		}
 		[Inline]
-		protected virtual void OnDestroyComponent(ComponentBase component) {}
-
-		public struct ComponentEnumerator<T> : IEnumerator<T>, IResettable where T : ComponentBase
-		{
-			// @do This has the same problem that ids do not necessarily work well with inheritance
-
-			ComponentBase current = null;
-			Scene Scene;
-			int Type;
-
-			public this(Scene scene)
-			{
-				Scene = scene;
-				let index = ComponentBase.RealTypeByComponentType.IndexOf(typeof(T));
-				/*Debug.Assert(index >= 0, "C");*/
-				Type = index;
-			}
-
-			public Result<T> GetNext() mut
-			{
-				if (Type < 0)
-					return .Err; // Component type not registered
-
-				//Scene.componentsByType[Type].GetEnumerator()
-
-				return (T)current;
-			}
-
-			public void Reset() mut
-			{
-				current = null;
-			}
-		}
-
-		// virtual void SortRenderOrder -- overrideable?
-		// virtual functions for update and render order computations
+		protected virtual void OnDestroyComponent(Component component) {}
 	}
 }
