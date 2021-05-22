@@ -21,15 +21,14 @@ namespace Dimtoo
 		public void Destroy() => Scene.DestroyEntity(this);
 
 		[Inline]
-		public T CreateComponent<T>() where T : Component, new
+		public T CreateComponent<T>(T component) where T : Component
 		{
-			return Scene.CreateComponent<T>(this);
+			return Scene.CreateComponent<T>(component, this);
 		}
 
 		[Inline]
 		public void DestroyComponent(Component component)
 		{
-#if DEBUG
 			bool contained = false;
 			for (let comp in this)
 				if (comp == component)
@@ -39,8 +38,7 @@ namespace Dimtoo
 				}
 
 			if (!contained)
-				Debug.FatalError("Destroying component on entity that doesn't own it");
-#endif
+				Runtime.FatalError("Destroying component on entity that doesn't own it");
 
 			Scene.DestroyComponent(component);
 		}

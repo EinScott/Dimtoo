@@ -1,13 +1,15 @@
 using System;
 using System.Collections;
+using Pile;
 
 namespace Dimtoo
 {
 	[Reflect(.Type),StaticInitPriority(-1)]
 	abstract class Component
 	{
-		static List<Type> updateParticipants = new .() ~ delete _;
-		static List<Type> renderParticipants = new .() ~ delete _;
+		internal static List<Type> updateParticipants = new .() ~ delete _;
+		internal static List<Type> renderParticipants = new .() ~ delete _;
+		internal static HashSet<Type> entityLimitedComponents = new .() ~ delete _;
 
 		static this()
 		{
@@ -20,7 +22,7 @@ namespace Dimtoo
 					continue;
 
 				var it = type;
-				var hasUpdate = false, hasRender = false, hasPriority = false, updatePriority = 0;
+				var hasUpdate = false, hasRender = false, hasPriority = false, updatePriority = 0, limited = false;
 				while (true)
 				{
 					if (!hasUpdate && it.HasCustomAttribute<UpdateAttribute>())
@@ -28,6 +30,9 @@ namespace Dimtoo
 
 					if (!hasRender && it.HasCustomAttribute<RenderAttribute>())
 						hasRender = true;
+
+					if (!hasRender && it.HasCustomAttribute<EntityLimitedAttribute>())
+						limited = true;
 
 					if (!hasPriority && type.GetCustomAttribute<PriorityAttribute>() case .Ok(let val))
 					{
@@ -69,6 +74,9 @@ namespace Dimtoo
 
 				if (hasRender)
 					renderParticipants.Add(type);
+
+				if (limited)
+					entityLimitedComponents.Add(type);
 			}
 		}
 
@@ -79,6 +87,6 @@ namespace Dimtoo
 		protected virtual void Attach() {}
 
 		protected virtual void Update() {}
-		protected virtual void Render() {}
+		protected virtual void Render(Batch2D batch) {}
 	}
 }
