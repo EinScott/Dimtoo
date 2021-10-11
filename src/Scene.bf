@@ -3,202 +3,336 @@ using System.Collections;
 using System.Diagnostics;
 using Pile;
 
-using internal Dimtoo;
-
 namespace Dimtoo
 {
-	[AttributeUsage(.Class, .ReflectAttribute|.DisallowAllowMultiple)]
-	struct UpdateAttribute : Attribute {}
-	[AttributeUsage(.Class, .ReflectAttribute|.DisallowAllowMultiple)]
-	struct RenderAttribute : Attribute {}
-	[AttributeUsage(.Class, .ReflectAttribute|.DisallowAllowMultiple)]
-	struct PriorityAttribute : Attribute, this(int updatePriority);
-	[AttributeUsage(.Class, .ReflectAttribute|.DisallowAllowMultiple)]
-	struct EntityLimitedAttribute : Attribute {}
-	/*[AttributeUsage(.Class)]
-	struct RequireAttribute<T> : Attribute where T : ComponentBase
+	typealias Entity = uint16;
+	typealias ComponentType = uint8;
+
+	struct Signature : uint64
 	{
-		public const Type Required = typeof(T);
-	}*/
+		[Inline]
+		public void Add(uint8 bit) mut
+		{
+			this |= (1 << bit);
+		}
+
+		[Inline]
+		public void Remove(uint8 bit) mut
+		{
+			this = this & ~(1 << bit);
+		}
+	}
+
+	static
+	{
+		public const Entity MAX_ENTITIES = 4096;
+		public const ComponentType MAX_COMPONENTS = 64;
+	}
+
+	class EntityManager
+	{
+		readonly List<Entity> availableEntities = new .(MAX_ENTITIES) ~ delete _;
+		Signature[MAX_ENTITIES] signatures;
+		uint16 livingEntityCount;
+
+		[Inline]
+		public this()
+		{
+			for (var i = MAX_ENTITIES - 1; i >= 0; i--)
+				availableEntities.Add((uint16)i);
+		}
+
+		[Inline]
+		public Entity CreateEntity()
+		{
+			Runtime.Assert(livingEntityCount < MAX_ENTITIES, "Too many entities");
+			
+			livingEntityCount++;
+			return availableEntities.PopBack();
+		}
+
+		[Inline]
+		public void DestroyEntity(Entity e)
+		{
+			Debug.Assert(e < MAX_ENTITIES, "Entity out of range");
+			
+			livingEntityCount--;
+			availableEntities.Add(e);
+			signatures[e] = default;
+		}
+
+		public Signature this[Entity e]
+		{
+			[Inline]
+			get
+			{
+				Debug.Assert(e < MAX_ENTITIES, "Entity out of range");
+
+				return signatures[e];
+			}
+
+			[Inline]
+			set
+			{
+				Debug.Assert(e < MAX_ENTITIES, "Entity out of range");
+
+				signatures[e] = value;
+			}
+		}
+	}
+
+	interface ComponentArrayBase
+	{
+		void OnEntityDestroyed(Entity e);
+	}
+
+	class ComponentArray<T> : ComponentArrayBase where T : struct
+	{
+		T[MAX_ENTITIES] components;
+		readonly Dictionary<Entity, int> entityToIndex = new .() ~ delete _;
+		readonly List<Entity> indexToEntity = new .() ~ delete _;
+		int size;
+
+		public void InsertData(Entity e, T component)
+		{
+			Debug.Assert(!entityToIndex.ContainsKey(e), "Component added to the same entity more than once");
+
+			let newIndex = size++;
+			components[e] = component;
+
+			// Add to lookups
+			entityToIndex.Add(e, newIndex);
+			if (indexToEntity.Count == newIndex)
+				indexToEntity.Add(e);
+			else indexToEntity[newIndex] = e;
+		}
+
+		public void RemoveData(Entity e)
+		{
+			Debug.Assert(entityToIndex.ContainsKey(e), "Component not present on this entity");
+
+			let indexOfRemovedEntity = entityToIndex[e];
+			let indexOfLastElement = --size;
+
+			// Replace removed with last element
+			components[indexOfRemovedEntity] = components[indexOfLastElement];
+
+			// Update index of moved last element
+			Entity entityOfLastElement = indexToEntity[indexOfLastElement];
+			entityToIndex[entityOfLastElement] = indexOfRemovedEntity;
+			indexToEntity[indexOfRemovedEntity] = entityOfLastElement;
+
+			// Clean up lookup of removed
+			entityToIndex.Remove(e);
+			indexToEntity.PopBack();
+		}
+
+		[Inline]
+		public T* GetData(Entity e)
+		{
+			Debug.Assert(entityToIndex.ContainsKey(e), "Component not present on this entity");
+
+			return &components[entityToIndex[e]];
+		}
+
+		[Inline]
+		public void OnEntityDestroyed(Entity e)
+		{
+			// If the entity had that component, remove it from us
+			if (entityToIndex.ContainsKey(e))
+				RemoveData(e);
+		}
+	}
+
+	class ComponentManager
+	{
+		readonly Dictionary<Type, (ComponentType type, ComponentArrayBase array)> componentArrays = new .() ~ {
+			for (let a in _)
+				delete a.value.array;
+			delete _;
+		};
+		ComponentType nextType;
+
+		[Inline]
+		public void RegisterComponent<T>() where T : struct
+		{
+			Debug.Assert(!componentArrays.ContainsKey(typeof(T)), "Component type already registered");
+
+			componentArrays.Add(typeof(T), (nextType++, new ComponentArray<T>()));
+		}
+
+		[Inline]
+		public ComponentType GetComponentType<T>() where T : struct
+		{
+			Debug.Assert(componentArrays.ContainsKey(typeof(T)), "Component type not registered");
+
+			return componentArrays[typeof(T)].type;
+		}
+
+		[Inline]
+		public ComponentType GetComponentType(Type t)
+		{
+			Debug.Assert(componentArrays.ContainsKey(t), "Component type not registered");
+
+			return componentArrays[t].type;
+		}
+
+		[Inline]
+		public void AddComponent<T>(Entity e, T component) where T : struct
+		{
+			GetComponentArray<T>().InsertData(e, component);
+		}
+
+		[Inline]
+		public void RemoveComponent<T>(Entity e) where T : struct
+		{
+			GetComponentArray<T>().RemoveData(e);
+		}
+
+		[Inline]
+		public T* GetComponent<T>(Entity e) where T : struct
+		{
+			return GetComponentArray<T>().GetData(e);
+		}
+
+		[Inline]
+		public void OnEntityDestroyed(Entity e)
+		{
+			// Notify all componentArrays
+			for (let tup in componentArrays.Values)
+				tup.array.OnEntityDestroyed(e);
+		}
+
+		[Inline]
+		ComponentArray<T> GetComponentArray<T>() where T : struct
+		{
+			Debug.Assert(componentArrays.ContainsKey(typeof(T)), "Component type not registered");
+
+			return (ComponentArray<T>)componentArrays[typeof(T)].array;
+		}
+	}
+
+	abstract class ComponentSystem
+	{
+		public readonly Span<Type> signatureTypes;
+		public readonly HashSet<Entity> entities = new HashSet<uint16>() ~ delete _;
+		public ComponentManager componentManager;
+	}
+
+	class SystemManager
+	{
+		readonly Dictionary<Type, (Signature signature, ComponentSystem system)> systems = new .() ~ {
+			for (var p in _.Values)
+				delete p.system;
+			delete _;
+		};
+
+		[Inline]
+		public T RegisterSystem<T>() where T : ComponentSystem
+		{
+			Debug.Assert(!systems.ContainsKey(typeof(T)), "System already registered");
+
+			let sys = new T();
+			systems.Add(typeof(T), (default, sys));
+			return sys;
+		}
+
+		[Inline]
+		public void SetSignature<T>(Signature signature)
+		{
+			Debug.Assert(systems.ContainsKey(typeof(T)), "System not registered");
+
+			systems[typeof(T)].signature = signature;
+		}
+
+		[Inline]
+		public void OnEntityDestroyed(Entity e)
+		{
+			for (let tup in systems.Values)
+				tup.system.entities.Remove(e);
+		}
+
+		[Inline]
+		public void OnEntitySignatureChanged(Entity e, Signature sig)
+		{
+			for (let tup in systems)
+			{
+				// Add and remove from systems according to signature mask
+				if ((tup.value.signature & sig) == tup.value.signature)
+					tup.value.system.entities.Add(e);
+				else tup.value.system.entities.Remove(e);
+			}
+		}
+	}
 
 	class Scene
 	{
-		public abstract class System
-		{
-			// For things acting on multiple components/entities, like collision, which is not really owned by a system
-			// these should get callbacks for all the common actions
-			// but also, these are characteristically not really accessed by the outside
-
-			// or just scene-level extensions
-		}
-
-		// IF we had multidicts, most of this (and assets) could be simpler
-
-		uint32 next = 1;
-		Dictionary<Type, List<Component>> componentsByType = new .();
-		internal Dictionary<uint32, Component> componentsByEntity = new .() ~ delete _; // ComponentBase has linked list
-
-		// render by layer...?
-
-		public ~this()
-		{
-			for (let list in componentsByType.Values)
-			{
-				for (var value in list)
-					delete value;
-				delete list;
-			}	
-
-			delete componentsByType;
-		}
-
-		// get entities by tag, get components by attribute, get components by type, get components by entity
-		// components are allocated and deleted only by this thing!
-		// do get()s lookups respect inheritance? because they probably should
-
-		// enable disable on entity and component layer
-		// so does every component need two enalbed flags then? i guess so... yeah, just a bit field?
-
-		public void Update()
-		{
-			// to change: active
-
-			for (let type in Component.updateParticipants)
-			{
-				if (componentsByType.TryGetValue(type, let list))
-				{
-					for (let comp in list)
-						comp.[Friend]Update();
-				}
-			}
-		}
-
-		public void Render(Batch2D batch)
-		{
-			// to change: layers?? i guess...
-			// so we have batcher layers and actual layers... what diff does it make?
-
-			for (let type in Component.renderParticipants)
-			{
-				if (componentsByType.TryGetValue(type, let list))
-				{
-					for (let comp in list)
-						comp.[Friend]Render(batch);
-				}
-			}
-		}
+		protected readonly SystemManager sysMan = new .() ~ delete _;
+		protected readonly ComponentManager compMan = new .() ~ delete _;
+		protected readonly EntityManager entMan = new .() ~ delete _;
 
 		[Inline]
-		bool Valid(Entity e) => e.ID != 0 && e.Scene == this && e.ID < next;
-		[Inline]
-		bool InUse(Entity e) => Valid(e) && componentsByEntity.ContainsKey(e);
-
-		public Entity CreateEntity()
-		{
-			let ent = Entity(next++, this);
-			OnCreateEntity(ent);
-			return ent;
-		}
-		public Entity CreateEntityWith<T>(T component) where T : Component, new
-		{
-			let ent = Entity(next++, this);
-			OnCreateEntity(ent);
-			CreateComponent<T>(component, ent);
-
-			return ent;
-		}
-		[Inline]
-		protected virtual void OnCreateEntity(Entity e) {}
+		public Entity CreateEntity() => entMan.CreateEntity();
 
 		public void DestroyEntity(Entity e)
 		{
-			Runtime.Assert(InUse(e));
-
-			if (componentsByEntity.TryGetValue(e, var itComp))
-			{
-				// Destroy all components
-				while (itComp.nextOnEntity != null)
-				{
-					let comp = itComp;
-					itComp = itComp.nextOnEntity;
-
-					DestroyComponent(comp, false);
-				}
-
-				// Remove whole entry
-				componentsByEntity.Remove(e);
-			}
+			entMan.DestroyEntity(e);
+			compMan.OnEntityDestroyed(e);
+			sysMan.OnEntityDestroyed(e);
 		}
 
-		protected internal T CreateComponent<T>(T component, Entity e) where T : Component
-		{
-			Runtime.Assert(!(Component.entityLimitedComponents.Contains(typeof(T)) && e.GetComponent<T>() case .Ok), "Component can only be on entity once");
-			Runtime.Assert(Valid(e), "Invalid entity");
-			Runtime.Assert(component.Entity.Scene == null, "Component already in use");
-
-			component.Entity = e;
-
-			if (!componentsByType.ContainsKey(typeof(T)))
-				componentsByType.Add(typeof(T), new .());
-			componentsByType[typeof(T)].Add(component);
-
-			if (!componentsByEntity.ContainsKey(e))
-				componentsByEntity.Add(e, component);
-			else
-			{
-				// Append to linked list
-				var itComp = componentsByEntity[e];
-				while (itComp.nextOnEntity != null)
-					itComp = itComp.nextOnEntity;
-
-				itComp.nextOnEntity = component;
-			}
-
-			OnCreateComponent(component, e);
-
-			component.[Friend]Attach();
-			return component;
-		}
 		[Inline]
-		protected virtual void OnCreateComponent(Component component, Entity e) {}
+		public void RegisterComponent<T>() where T : struct => compMan.RegisterComponent<T>();
 
-		protected internal void DestroyComponent(Component component, bool maintainEntityList = true, bool deleteComp = true)
+		public void AddComponent<T>(Entity e, T component = default) where T : struct
 		{
-			Runtime.Assert(InUse(component.Entity));
+			compMan.AddComponent(e, component);
 
-			OnDestroyComponent(component);
+			var sig = entMan[e];
+			sig.Add(compMan.GetComponentType<T>());
+			entMan[e] = sig;
 
-			componentsByType[component.GetType()].Remove(component);
-
-			if (maintainEntityList)
-			{
-				Runtime.Assert(componentsByEntity.TryGetValue(component.Entity, var itComp));
-
-				if (itComp.nextOnEntity == null)
-					componentsByEntity.Remove(component.Entity);
-				else
-				{
-					bool removed = false;
-					while (itComp.nextOnEntity != null)
-					{
-						if (itComp.nextOnEntity == component)
-						{
-							itComp.nextOnEntity = itComp.nextOnEntity.nextOnEntity; // This might be null and that's fine
-
-							removed = true;
-							break;
-						}
-
-						itComp = itComp.nextOnEntity;
-					}
-					Runtime.Assert(removed);
-				}
-			}
-
-			if (deleteComp)
-				delete component;
+			sysMan.OnEntitySignatureChanged(e, sig);
 		}
+
+		public void RemoveComponent<T>(Entity e) where T : struct
+		{
+			compMan.RemoveComponent<T>(e);
+
+			var sig = entMan[e];
+			sig.Remove(compMan.GetComponentType<T>());
+			entMan[e] = sig;
+
+			sysMan.OnEntitySignatureChanged(e, sig);
+
+		}
+
 		[Inline]
-		protected virtual void OnDestroyComponent(Component component) {}
+		public T* GetComponent<T>(Entity e) where T : struct => compMan.GetComponent<T>(e);
+
+		[Inline]
+		public ComponentType GetComponentType<T>() where T : struct => compMan.GetComponentType<T>();
+
+		[Inline]
+		public T RegisterSystem<T>() where T : ComponentSystem
+		{
+			let sys = sysMan.RegisterSystem<T>();
+			
+			// Assemble signature from the system's requirements
+			// Will error if the given types aren't already registered components
+			Signature s = default;
+			for (let t in sys.signatureTypes)
+				s.Add(compMan.GetComponentType(t));
+			sysMan.SetSignature<T>(s);
+
+			sys.componentManager = compMan;
+			return sys;
+		}
+	}
+
+	struct Transform
+	{
+		public Vector2 position;
+		public float rotation;
 	}
 }

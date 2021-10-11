@@ -17,7 +17,8 @@ namespace Dimtoo
 			Try!(mem.TryWrite(data));
 			mem.Position = 0;
 
-			let ase = scope Aseprite(mem);
+			let ase = scope Aseprite();
+			Try!(ase.Parse(mem));
 
 			let frames = scope List<Sprite.Frame>();
 			let frameName = scope String();
@@ -50,11 +51,9 @@ namespace Dimtoo
 			return .Ok;
 		}
 
-		public Result<uint8[]> Build(Span<uint8> data, Span<StringView> config, StringView dataFilePath)
+		public Result<uint8[]> Build(Stream data, Span<StringView> config, StringView dataFilePath)
 		{
-			let outData = new uint8[data.Length];
-			data.CopyTo(outData);
-			return outData; // For now, just save the whole aseprite file, later move stuff from up there to here
+			return Importer.TryStreamToArray!(data);
 		}
 	}
 }
