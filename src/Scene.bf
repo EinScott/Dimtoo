@@ -284,7 +284,7 @@ namespace Dimtoo
 		[Inline]
 		public void RegisterComponent<T>() where T : struct => compMan.RegisterComponent<T>();
 
-		public void AddComponent<T>(Entity e, T component = default) where T : struct
+		public void AddComponent<T>(Entity e, T component) where T : struct
 		{
 			compMan.AddComponent(e, component);
 
@@ -333,6 +333,15 @@ namespace Dimtoo
 	struct Transform
 	{
 		public Vector2 position;
+		public Vector2 scale;
 		public float rotation;
+
+		public this() { this = default; scale = .One; }
+		public this(Vector2 position, Vector2 scale = .One, float rotation = 0)
+		{
+			this.position = position;
+			this.scale = scale;
+			this.rotation = rotation;
+		}
 	}
 }
