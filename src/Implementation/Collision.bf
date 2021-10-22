@@ -5,11 +5,6 @@ using System.Collections;
 
 namespace Dimtoo
 {
-	// - triggers system! -- seperate system to operate after all the movement is over -> each component will know from state if an overlap is new or old!
-
-	// TODO: collision masks / layers / matrix
-	// - do old "edges system" to make certain ones passable
-
 	// !! if we have a contact in the direction we're currently moving in, even if we dont trigger a collision (due to rounding / floats),
 	//    always report one, cause that makes more sense
 
@@ -37,44 +32,52 @@ namespace Dimtoo
 		case Rect(int count, ColliderRect[16] colliders);
 		case Grid(Point2 offset, uint8 cellX, uint8 cellY, bool[32*32] collide);
 
-		public Rect GetRectByIndex(int index)
+		public ColliderRect this[int index] =>
 		{
-			// TODO: depending on grid, interpret the index given and give back the coresponding rect.
-			// probably also put the function that somehow makes an index out of a rect from the collider here somehow, maybe even dependant on grid type
+			ColliderRect res = .(default);
 			switch (this)
 			{
 			case .Rect(let count,let colliders):
+				Debug.Assert(index < index);
+				res = colliders[index];
 			case .Grid(let offset,let cellX,let cellY,let collide):
 			}
+			res
+		}
+	}
 
-			return default;
+	struct LayerMask : uint64
+	{
+		public bool this[int layer]
+		{
+			[Inline]
+			get => (this & (uint64)(1 << layer)) > 0;
+			set mut => this |= (uint64)(1 << layer);
 		}
 
-		public Rect this[int index] =>
+		public bool Overlaps(LayerMask other) => (this & other) > 0;
+
+		public static implicit operator Self(uint64 i)
 		{
-			Rect res = .();
-			switch (this)
-			{
-			case .Rect(let count,let colliders):
-			case .Grid(let offset,let cellX,let cellY,let collide):
-			}
-			res // TODO
+			LayerMask m = default;
+			*(uint64*)&m = i;
+			return m;
 		}
 	}
 
 	struct ColliderRect
 	{
-		public this(Rect rect, Edge solid = .All)
+		public this(Rect rect, Edge solid = .All, LayerMask layer = 0x1)
 		{
 			this.rect = rect;
-			this.solid = solid;
+			this.solid = solid; // By default all edges solid
+			this.layer = layer; // By default on layer 0
 		}
 
 		public Rect rect;
 		public Edge solid;
+		public LayerMask layer;
 	}
-
-	// TODO: feedback stuff (optionals)
 
 	// Feedback of a body's own movement collision "it collides into something else"
 	struct CollisionMoveFeedback
@@ -82,7 +85,11 @@ namespace Dimtoo
 		public CollisionInfo moveCollision;
 		public CollisionInfo slideCollision;
 
-		// TODO: helper methods here and below to make looking at this, or looking at any of these easier!
+		[Inline]
+		public bool Occured() => moveCollision.Occured() || slideCollision.Occured();
+
+		[Inline]
+		public Edge GetHitEdges() => moveCollision.myHitEdge | slideCollision.myHitEdge;
 	}
 
 	// Feedback of a body's received collision "something else collides into it"
@@ -90,6 +97,18 @@ namespace Dimtoo
 	{
 		public int collisionCount;
 		public CollisionInfo[16] collisions;
+
+		[Inline]
+		public bool Occured() => collisionCount > 0;
+
+		[Inline]
+		public Edge GetHitEdges()
+		{
+			Edge res = .None;
+			for (let i < collisionCount)
+				res |= collisions[i].myHitEdge;
+			return res;
+		}
 	}
 
 	struct CollisionInfo
@@ -186,27 +205,32 @@ namespace Dimtoo
 		[PerfTrack]
 		public void Resolve()
 		{
-			for (let eMove in entities)
+			for (let e in entities)
+				if (componentManager.GetComponentOptional<CollisionReceiveFeedback>(e, let feedback))
+				{
+					feedback.collisionCount = 0;
+					feedback.collisions = .();
+				}
+
+			for (let e in entities)
 			{
-				let aCob = componentManager.GetComponent<CollisionBody>(eMove);
-				let aTra = componentManager.GetComponent<Transform>(eMove);
+				let aCob = componentManager.GetComponent<CollisionBody>(e);
+				let aTra = componentManager.GetComponent<Transform>(e);
 
 				// Make the resolve set for a, also manage a's remainder position when deciding integer position and movement
-				var a = PrepareResolveSet(aTra, aCob, out aTra.position); // Put this into our transform to process subpixel movements
+				var a = PrepareResolveSet(aTra, aCob, out aTra.position); // Put this into our transform to process sub-pixel movements
 				aCob.move = .Zero;
 
 				if (a.move == .Zero)
 					continue; // a must move!
 
 				// Move info
-				//CollisionInfo info = .();
-
 				Point2 currMove = a.move;
-				CheckMove(eMove, ref a, let hitEdge);
+				CheckMove(e, ref a, let moveInfo);
 
 				Point2 slideMove = ?;
 				bool doSlide = true;
-				switch (hitEdge)
+				switch (moveInfo.myHitEdge)
 				{
 				case .Left, .Right:
 					slideMove.X = 0;
@@ -220,6 +244,7 @@ namespace Dimtoo
 					Debug.FatalError();
 				}
 
+				CollisionInfo slideInfo;
 				if (doSlide)
 				{
 					currMove = a.move; // Save this here for later
@@ -228,9 +253,16 @@ namespace Dimtoo
 					a.pos += a.move;
 					a.move = slideMove;
 
-					CheckMove(eMove, ref a, let slideHitEdge);
+					CheckMove(e, ref a, out slideInfo);
 
 					a.move += currMove; // Add back onto confirmed slide move to get the full movement
+				}
+				else slideInfo = .();
+
+				if (componentManager.GetComponentOptional<CollisionMoveFeedback>(e, let collFeedback))
+				{
+					collFeedback.moveCollision = moveInfo;
+					collFeedback.slideCollision = slideInfo;
 				}
 
 				// Actually move
@@ -238,20 +270,23 @@ namespace Dimtoo
 			}
 		}
 
-		void CheckMove(Entity eMove, ref ResolveSet a, out Edge hitEdge)
+		void CheckMove(Entity eMove, ref ResolveSet a, out CollisionInfo aInfo)
 		{
 			var moverPathRect = MakePathRect(a);
 
 			float hitPercent = 1;
-			hitEdge = .None;
+			aInfo = .();
 
-			for (let eMove2 in entities)
+			Entity eHit = 0;
+			CollisionInfo bInfo = .();
+
+			for (let eOther in entities)
 			{
-				if (eMove == eMove2)
+				if (eMove == eOther)
 					continue; // b is not a!
 
-				let bCob = componentManager.GetComponent<CollisionBody>(eMove2);
-				let bTra = componentManager.GetComponent<Transform>(eMove2);
+				let bCob = componentManager.GetComponent<CollisionBody>(eOther);
+				let bTra = componentManager.GetComponent<Transform>(eOther);
 
 				let b = PrepareResolveSet(bTra, bCob, ?);
 				let checkPathRect = MakePathRect(b);
@@ -259,11 +294,16 @@ namespace Dimtoo
 				// If they overlap the moveRect
 				if (moverPathRect.Overlaps(checkPathRect))
 				{
+					bool otherMoving = false;
 					if (b.move != .Zero)
-						{}// TODO: how do we handle moving b that moves?
-					// we will probably (since the movements here are "instant" / all made in the same amount of time) just move both to the same percentage until it works? -- some fancy math?
-					// -> DEF a test to figure out the direction of the movers, and if their directons dont interfere / are opposite, just ignore
-					// 	-> also need to handle contacts differently, since after their own resolve, they might be anywhere inside their moveRect
+					{
+						otherMoving = true;
+
+						// TODO: how do we handle moving b that moves?
+						// we will probably (since the movements here are "instant" / all made in the same amount of time) just move both to the same percentage until it works? -- some fancy math?
+						// -> DEF a test to figure out the direction of the movers, and if their directons dont interfere / are opposite, just ignore
+						// 	-> also need to handle contacts differently, since after their own resolve, they might be anywhere inside their moveRect
+					}
 
 					bool moveChanged = false;
 					switch ((a.coll, b.coll))
@@ -272,34 +312,64 @@ namespace Dimtoo
 						for (let ai < aCount)
 							for (let bi < bCount)
 							{
-#if DEBUG								
-								bool enteredCollider = false;
+#if DEBUG
+								bool dbgColliderEntered = false;
 #endif
-
 								let aRect = Rect(a.pos + aRects[ai].rect.Position, aRects[ai].rect.Size);
 								let bRect = Rect(b.pos + bRects[bi].rect.Position, bRects[bi].rect.Size);
+
 								CHECK:do if (!aRect.Overlaps(bRect) // Do not get stuck when already inside
+									&& aRects[ai].layer.Overlaps(bRects[ai].layer)
 									&& CheckRects(aRect, bRect, a.move, let newHitPercent, let newHitEdge)
 									&& newHitPercent < hitPercent)
 								{
 									if ((aRects[ai].solid & newHitEdge) == 0 || (bRects[bi].solid & newHitEdge.Inverse) == 0)
 									{
 #if DEBUG
-										enteredCollider = true; // We entered the collider through a non-solid edge
+										dbgColliderEntered = true; // We entered the collider through a non-solid edge
 #endif
 										break CHECK;
 									}
 
-									hitEdge = newHitEdge;
+									aInfo = .()
+										{
+											iWasMoving = true,
+											myHitEdge = newHitEdge,
+											myColliderIndex = ai,
+											myDir = ((Vector2)a.move).Normalize(),
+
+											other = eOther,
+											otherWasMoving = otherMoving,
+											otherColliderIndex = bi,
+											otherDir = ((Vector2)b.move).Normalize()
+										};
+
+									if (componentManager.GetComponentOptional<CollisionReceiveFeedback>(eOther, ?))
+									{
+										eHit = eOther;
+										bInfo = .()
+											{
+												iWasMoving = otherMoving,
+												myHitEdge = newHitEdge.Inverse,
+												myColliderIndex = bi,
+												myDir = ((Vector2)b.move).Normalize(),
+
+												other = eMove,
+												otherWasMoving = true,
+												otherColliderIndex = ai,
+												otherDir = ((Vector2)a.move).Normalize()
+											};
+									}
+									
 									hitPercent = newHitPercent;
 									a.move = ((Vector2)a.move * hitPercent).Round();
 
 									moveChanged = true;
 								}
 #if DEBUG
-								else enteredCollider = true; // We were already inside that collider before moving
+								else dbgColliderEntered = true; // We were already inside that collider before moving
 
-								Debug.Assert(enteredCollider || !Rect(a.pos + a.move + aRects[ai].rect.Position, aRects[ai].rect.Size).Overlaps(bRect), "Mover entered collider illegally.");
+								Debug.Assert(dbgColliderEntered || !Rect(a.pos + a.move + aRects[ai].rect.Position, aRects[ai].rect.Size).Overlaps(bRect), "Mover entered collider illegally.");
 #endif
 							}
 					case (.Rect(let count, let rects), .Grid(let offset,let cellX,let cellY,let collide)):
@@ -313,6 +383,17 @@ namespace Dimtoo
 						moverPathRect = MakePathRect(a);
 					}
 				}
+			}
+
+			// Apply the collision received on b
+			if (eHit != 0)
+			{
+				// Since this was set, we know this exists on the entity
+				let feedback = componentManager.GetComponent<CollisionReceiveFeedback>(eHit);
+
+				Debug.Assert(feedback.collisionCount < feedback.collisions.Count - 1, "Too many collisions to record in receivedFeedback");
+
+				feedback.collisions[feedback.collisionCount++] = bInfo;
 			}
 		}
 
