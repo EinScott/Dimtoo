@@ -5,6 +5,11 @@ using System.Collections;
 
 namespace Dimtoo
 {
+	// TODO: (generally) maybe replace all these arrays with StaticList<T> which would just be a fixedcapacity list
+	// also replace these for outer loops with stuff that loads the loop body as a anon function off to a threadpool?
+	// -> at least test if thats faster
+
+
 	// !! if we have a contact in the direction we're currently moving in, even if we dont trigger a collision (due to rounding / floats),
 	//    always report one, cause that makes more sense
 
@@ -148,6 +153,11 @@ namespace Dimtoo
 				let tra = componentManager.GetComponent<Transform>(e);
 				let cob = componentManager.GetComponent<CollisionBody>(e);
 
+				if (cob.move != .Zero)
+					batch.Line(tra.position, tra.position + cob.move, 1, .Magenta);
+
+				batch.HollowRect(MakePathRect(PrepareResolveSet(tra, cob, ?)), 1, .Gray);
+
 				switch (cob.collider)
 				{
 				case .Grid(let offset,let cellX,let cellY,let collide):
@@ -164,11 +174,6 @@ namespace Dimtoo
 						batch.HollowRect(.(tra.position.Round() + coll.rect.Position, coll.rect.Size), 1, .Red);
 					}
 				}
-
-				if (cob.move != .Zero)
-					batch.Line(tra.position, tra.position + cob.move, 1, .Magenta);
-
-				batch.HollowRect(MakePathRect(PrepareResolveSet(tra, cob, ?)), 1, .Gray);
 			}
 		}
 
@@ -202,7 +207,7 @@ namespace Dimtoo
 			return a;
 		}
 
-		[PerfTrack]
+		[PerfTrack,Optimize]
 		public void Resolve()
 		{
 			for (let e in entities)
@@ -269,7 +274,8 @@ namespace Dimtoo
 				aTra.position += a.move;
 			}
 		}
-
+		
+		[Optimize]
 		void CheckMove(Entity eMove, ref ResolveSet a, out CollisionInfo aInfo)
 		{
 			var moverPathRect = MakePathRect(a);
@@ -311,67 +317,67 @@ namespace Dimtoo
 					case (.Rect(let aCount, let aRects), .Rect(let bCount,let bRects)):
 						for (let ai < aCount)
 							for (let bi < bCount)
-							{
-#if DEBUG
-								bool dbgColliderEntered = false;
-#endif
-								let aRect = Rect(a.pos + aRects[ai].rect.Position, aRects[ai].rect.Size);
-								let bRect = Rect(b.pos + bRects[bi].rect.Position, bRects[bi].rect.Size);
-
-								CHECK:do if (!aRect.Overlaps(bRect) // Do not get stuck when already inside
-									&& aRects[ai].layer.Overlaps(bRects[ai].layer)
-									&& CheckRects(aRect, bRect, a.move, let newHitPercent, let newHitEdge)
-									&& newHitPercent < hitPercent)
+								if (aRects[ai].layer.Overlaps(bRects[ai].layer))
 								{
-									if ((aRects[ai].solid & newHitEdge) == 0 || (bRects[bi].solid & newHitEdge.Inverse) == 0)
+	#if DEBUG
+									bool dbgColliderEntered = false;
+	#endif
+									let aRect = Rect(a.pos + aRects[ai].rect.Position, aRects[ai].rect.Size);
+									let bRect = Rect(b.pos + bRects[bi].rect.Position, bRects[bi].rect.Size);
+	
+									CHECK:do if (!aRect.Overlaps(bRect) // Do not get stuck when already inside
+										&& CheckRects(aRect, bRect, a.move, let newHitPercent, let newHitEdge)
+										&& newHitPercent < hitPercent)
 									{
-#if DEBUG
-										dbgColliderEntered = true; // We entered the collider through a non-solid edge
-#endif
-										break CHECK;
-									}
-
-									aInfo = .()
+										if ((aRects[ai].solid & newHitEdge) == 0 || (bRects[bi].solid & newHitEdge.Inverse) == 0)
 										{
-											iWasMoving = true,
-											myHitEdge = newHitEdge,
-											myColliderIndex = ai,
-											myDir = ((Vector2)a.move).Normalize(),
-
-											other = eOther,
-											otherWasMoving = otherMoving,
-											otherColliderIndex = bi,
-											otherDir = ((Vector2)b.move).Normalize()
-										};
-
-									if (componentManager.GetComponentOptional<CollisionReceiveFeedback>(eOther, ?))
-									{
-										eHit = eOther;
-										bInfo = .()
+	#if DEBUG
+											dbgColliderEntered = true; // We entered the collider through a non-solid edge
+	#endif
+											break CHECK;
+										}
+	
+										aInfo = .()
 											{
-												iWasMoving = otherMoving,
-												myHitEdge = newHitEdge.Inverse,
-												myColliderIndex = bi,
-												myDir = ((Vector2)b.move).Normalize(),
-
-												other = eMove,
-												otherWasMoving = true,
-												otherColliderIndex = ai,
-												otherDir = ((Vector2)a.move).Normalize()
+												iWasMoving = true,
+												myHitEdge = newHitEdge,
+												myColliderIndex = ai,
+												myDir = ((Vector2)a.move).Normalize(),
+	
+												other = eOther,
+												otherWasMoving = otherMoving,
+												otherColliderIndex = bi,
+												otherDir = ((Vector2)b.move).Normalize()
 											};
+	
+										if (componentManager.GetComponentOptional<CollisionReceiveFeedback>(eOther, ?))
+										{
+											eHit = eOther;
+											bInfo = .()
+												{
+													iWasMoving = otherMoving,
+													myHitEdge = newHitEdge.Inverse,
+													myColliderIndex = bi,
+													myDir = ((Vector2)b.move).Normalize(),
+	
+													other = eMove,
+													otherWasMoving = true,
+													otherColliderIndex = ai,
+													otherDir = ((Vector2)a.move).Normalize()
+												};
+										}
+										
+										hitPercent = newHitPercent;
+										a.move = ((Vector2)a.move * hitPercent).Round();
+	
+										moveChanged = true;
 									}
-									
-									hitPercent = newHitPercent;
-									a.move = ((Vector2)a.move * hitPercent).Round();
-
-									moveChanged = true;
+	#if DEBUG
+									else dbgColliderEntered = true; // We were already inside that collider before moving
+	
+									Debug.Assert(dbgColliderEntered || !Rect(a.pos + a.move + aRects[ai].rect.Position, aRects[ai].rect.Size).Overlaps(bRect), "Mover entered collider illegally.");
+	#endif
 								}
-#if DEBUG
-								else dbgColliderEntered = true; // We were already inside that collider before moving
-
-								Debug.Assert(dbgColliderEntered || !Rect(a.pos + a.move + aRects[ai].rect.Position, aRects[ai].rect.Size).Overlaps(bRect), "Mover entered collider illegally.");
-#endif
-							}
 					case (.Rect(let count, let rects), .Grid(let offset,let cellX,let cellY,let collide)):
 						// TODO
 					default: Debug.FatalError("Collider movement not implemented");

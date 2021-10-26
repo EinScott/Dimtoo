@@ -21,7 +21,7 @@ namespace Dimtoo
 		public int myColliderIndex, otherColliderIndex;
 	}
 
-	class ContactSystem : ComponentSystem, ITickSystem
+	class ContactSystem : ComponentSystem
 	{
 		static Type[?] wantsComponents = .(typeof(Transform), typeof(CollisionBody), typeof(ContactBody));
 		this
@@ -29,7 +29,7 @@ namespace Dimtoo
 			signatureTypes = wantsComponents;
 		}
 
-		public void Tick()
+		public void TickPostColl()
 		{
 			// We assume to be called after movement has taken place, otherwise looking which overlaps exist wouldn't make sense
 			// i.e.: (various updates adding force, setting movement) -> collision tick & other movement finalizing things

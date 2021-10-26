@@ -21,7 +21,7 @@ namespace Dimtoo
 			Debug.Assert(!entityToIndex.ContainsKey(e), "Component added to the same entity more than once");
 
 			let newIndex = size++;
-			components[e] = component;
+			components[newIndex] = component;
 
 			// Add to lookups
 			entityToIndex.Add(e, newIndex);
