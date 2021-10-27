@@ -2,6 +2,16 @@ using System;
 using System.Diagnostics;
 using Pile;
 
+// TODO:
+// separate ColliderRect and Grid!
+// grid needs to be its own this for us to have it here
+// the grid should not be bound to collision! we need it for rendering
+// -> so we may need different system just for keeping a list of (GridBody, Grid)
+//    GridBody has LayerMask, but does not provide a chance to move!
+// -> pass that system into Resolve!
+
+// TODO: also tileset importer
+
 namespace Dimtoo
 {
 	[Serializable]

@@ -18,6 +18,7 @@ namespace Dimtoo
 	// -> the physics system should take this info about contacts and collision, and just adjust the moves it makes us do accordingly?
 	// 	- if there would be multiple pushes across one frame, but taking multiple cycles here, maybe we need some prediction based on moverect??
 	//		-> maybe multiple pyhs update / move - cycles per update?
+	//	(or just PreCollTick and PostCollTick) or similar!
 
 	[Serializable]
 	struct CollisionBody
