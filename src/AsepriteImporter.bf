@@ -31,13 +31,13 @@ namespace Dimtoo
 				let subTex = Importers.SubmitTextureAsset(frameName, frame.Bitmap);
 
 				// Add frame
-				frames.Add(new Sprite.Frame(subTex, frame.Duration));
+				frames.Add(Sprite.Frame(subTex, frame.Duration));
 				i++;
 			}
 
-			let animations = scope List<Sprite.Animation>();
+			let animations = scope List<(String name, Sprite.Animation anim)>();
 			for (let tag in ase.Tags)
-				animations.Add(new Sprite.Animation(tag.Name, tag.From, tag.To));
+				animations.Add((new String(tag.Name), Sprite.Animation(tag.From, tag.To)));
 
 			Point2 origin = .Zero;
 			for (let slice in ase.Slices)
@@ -46,9 +46,14 @@ namespace Dimtoo
 					origin = slice.Pivot.Value;
 				}
 
-			Importers.SubmitAsset(name, new Sprite(frames, animations, origin));
-
-			return .Ok;
+			let asset = new Sprite(frames, animations, origin);
+			if (Importers.SubmitAsset(name, asset) case .Ok)
+				return .Ok;
+			else
+			{
+				delete asset;
+				return .Err;
+			}
 		}
 
 		public Result<uint8[]> Build(Stream data, Span<StringView> config, StringView dataFilePath)

@@ -1,26 +1,25 @@
 using System;
+using System.Collections;
 using System.Diagnostics;
 using Pile;
 
 namespace Dimtoo
 {
-	public class Sprite
+	class Sprite
 	{
-		public class Animation
+		public struct Animation
 		{
-			public readonly String Name = new String() ~ delete _;
 			public readonly int From;
 			public readonly int To;
 
-			public this(StringView name, int from, int to)
+			public this(int from, int to)
 			{
-				Name.Set(name);
 				From = from;
 				To = to;
 			}
 		}
 
-		public class Frame
+		public struct Frame
 		{
 			public readonly Subtexture Texture;
 			public readonly int Duration;
@@ -34,38 +33,40 @@ namespace Dimtoo
 			public static operator Subtexture(Frame frame) => frame.Texture;
 		}
 
-		Frame[] frames ~ DeleteContainerAndItems!(_);
-		Animation[] animations ~ DeleteContainerAndItems!(_);
+		Frame[] frames ~ delete _;
+		Dictionary<String,Animation> animations ~ delete _;
 		
 		public readonly Point2 Origin;
 
 		public readonly ReadOnlySpan<Frame> Frames;
-		public readonly ReadOnlySpan<Animation> Animations;
 
-		public this(Span<Frame> frameSpan, Span<Animation> animSpan, Point2 origin = .Zero)
+		public this(Span<Frame> frameSpan, Span<(String name, Animation anim)> animSpan, Point2 origin = .Zero)
 		{
 			Debug.Assert(frameSpan.Length > 0, "Sprite has to have at least one frame");
 
 			frames = new Frame[frameSpan.Length];
 			if (frameSpan.Length > 0) frameSpan.CopyTo(frames);
 
-			animations = new Animation[animSpan.Length];
-			if (animSpan.Length > 0) animSpan.CopyTo(animations);
+			animations = new .();
+			for (let tup in animSpan)
+				animations.Add(tup.name, tup.anim);
 
 			Frames = frames;
-			Animations = animations;
 			Origin = origin;
 		}
 
+		[Inline]
+		public bool HasAnimation(String name) => animations.ContainsKey(name);
+
 		public Animation GetAnimation(String name)
 		{
-			for (let anim in animations)
-				if (name == anim.Name) return anim;
+			if (animations.TryGetValue(name, let anim))
+				return anim;
 
-			Log.Warn(scope $"Animation {name} couldn't be found");
-			return null;
+			Runtime.FatalError(scope $"Animation {name} couldn't be found");
 		}
 
+		[Inline]
 		public void Draw(Batch2D batch, int frame, Vector2 position, Vector2 scale = .One, float rotation = 0, Color color = .White)
 		{
 			batch.Image(frames[frame].Texture, position, scale, Origin , rotation, color);

@@ -336,6 +336,17 @@ namespace Dimtoo
 						// YEAH thats fair, i mean we also fail to do sliding proberly after the distance is too high
 
 						// -> comment both of those limitations in movement at both places in the code, delete this after work is done.
+						// ACTUALLY, NO: we *should* still make it so it only slides as far as the edge goes, then repeat the move/slide loop until both
+						// move and slide hit or the movement of one axis is completely done
+						// -> similarly, here we WILL need to cover this properly
+
+						// everything has a distance it moves. Everything moves that distance during the same time, which means that
+						// the distance alone affects the "speed" of it. we shot make it so that both movers have moved the
+						// same percentage of their move ("same time"), and then see how far that makes both move
+						// -> make a formular and solve for the percentage, and then apply. sketches should help
+						//  -> also add the earlier mover to some sort of list and restore the lost movement in the case
+						//     that this is the final obstacle, since the other one might not be able to actually move that distance
+						//     or evaluate it here aswell
 					}
 
 					bool moveChanged = false;

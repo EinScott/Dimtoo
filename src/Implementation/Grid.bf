@@ -5,14 +5,14 @@ using Pile;
 namespace Dimtoo
 {
 	[Serializable]
-	struct GridRenderer
+	struct TileRenderer
 	{
-
+		
 	}
 
-	class GridRenderSystem : ComponentSystem, IRendererSystem
+	class TileRenderSystem : ComponentSystem, IRendererSystem
 	{
-		static Type[?] wantsComponents = .(typeof(GridRenderer), typeof(CollisionBody), typeof(Transform));
+		static Type[?] wantsComponents = .(typeof(TileRenderer), typeof(CollisionBody), typeof(Transform));
 		this
 		{
 			signatureTypes = wantsComponents;
