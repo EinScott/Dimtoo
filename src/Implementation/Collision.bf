@@ -9,7 +9,6 @@ namespace Dimtoo
 	// also replace these for outer loops with stuff that loads the loop body as a anon function off to a threadpool?
 	// -> at least test if thats faster
 
-
 	// !! if we have a contact in the direction we're currently moving in, even if we dont trigger a collision (due to rounding / floats),
 	//    always report one, cause that makes more sense
 
@@ -36,25 +35,40 @@ namespace Dimtoo
 	enum Collider
 	{
 		case Rect(int count, ColliderRect[16] colliders);
-		case Grid(Point2 offset, uint8 cellX, uint8 cellY, bool[32*32] collide);
+		case Grid(Point2 offset, uint8 cellX, uint8 cellY, bool[32*32] collide, LayerMask layer);
 
-		public ColliderRect this[int index] =>
+		public Rect this[int index] =>
 		{
-			ColliderRect res = .(default);
+			Rect res = default;
 			switch (this)
 			{
 			case .Rect(let count,let colliders):
-				Debug.Assert(index < index);
-				res = colliders[index];
-			case .Grid(let offset,let cellX,let cellY,let collide):
+				Debug.Assert(index < count);
+				res = colliders[index].rect;
+			case .Grid(let offset,let cellX,let cellY,?,?):
+				let x = index % 32;
+				let y = index - x;
+				res = .(offset + .(x * cellX, y * cellY), .(cellX, cellY));
 			}
 			res
+		};
+
+		[Inline]
+		public int GetGridIndex(int x, int y)
+		{
+			Debug.Assert(this case .Grid);
+			return y * 32 + x;
 		}
 	}
 
 	[CompSerializable]
 	struct LayerMask
 	{
+		public this(uint64 mask = 0x1)
+		{
+			val = mask;
+		}
+
 		uint64 val;
 
 		public bool this[int layer]
@@ -170,7 +184,7 @@ namespace Dimtoo
 
 				switch (cob.collider)
 				{
-				case .Grid(let offset,let cellX,let cellY,let collide):
+				case .Grid(let offset,let cellX,let cellY,let collide, let layer):
 					let origin = tra.position.Round() + offset;
 					Point2 size = .(cellX, cellY);
 					for (let y < 32)
@@ -321,6 +335,16 @@ namespace Dimtoo
 						// we will probably (since the movements here are "instant" / all made in the same amount of time) just move both to the same percentage until it works? -- some fancy math?
 						// -> DEF a test to figure out the direction of the movers, and if their directons dont interfere / are opposite, just ignore
 						// 	-> also need to handle contacts differently, since after their own resolve, they might be anywhere inside their moveRect
+
+						// do we just need to get the overlap rect of their move rects, then look at if they actually both move towards it (or their end position still overlap).
+						// if they move in the same direction, we need to call a recursive function (prob move content of outer loop in one)
+						//	to move that first!, then us to not overlap and make sure their move is valid (they actaully move where the plan to)
+						// when we know they will confront on the other hand, .. what exactly then?
+
+						// i guess we could approximate by just letting the one that moves further take all overlapping space? in most cases its probably just one pixel anyway
+						// YEAH thats fair, i mean we also fail to do sliding proberly after the distance is too high
+
+						// -> comment both of those limitations in movement at both places in the code, delete this after work is done.
 					}
 
 					bool moveChanged = false;
@@ -328,13 +352,14 @@ namespace Dimtoo
 					{
 					case (.Rect(let aCount, let aRects), .Rect(let bCount,let bRects)):
 						for (let ai < aCount)
+						{
+							let aRect = Rect(a.pos + aRects[ai].rect.Position, aRects[ai].rect.Size);
 							for (let bi < bCount)
 								if (aRects[ai].layer.Overlaps(bRects[ai].layer))
 								{
-	#if DEBUG
+#if DEBUG
 									bool dbgColliderEntered = false;
-	#endif
-									let aRect = Rect(a.pos + aRects[ai].rect.Position, aRects[ai].rect.Size);
+#endif
 									let bRect = Rect(b.pos + bRects[bi].rect.Position, bRects[bi].rect.Size);
 	
 									CHECK:do if (!aRect.Overlaps(bRect) // Do not get stuck when already inside
@@ -343,9 +368,9 @@ namespace Dimtoo
 									{
 										if ((aRects[ai].solid & newHitEdge) == 0 || (bRects[bi].solid & newHitEdge.Inverse) == 0)
 										{
-	#if DEBUG
+#if DEBUG
 											dbgColliderEntered = true; // We entered the collider through a non-solid edge
-	#endif
+#endif
 											break CHECK;
 										}
 	
@@ -384,14 +409,83 @@ namespace Dimtoo
 	
 										moveChanged = true;
 									}
-	#if DEBUG
+#if DEBUG
 									else dbgColliderEntered = true; // We were already inside that collider before moving
 	
 									Debug.Assert(dbgColliderEntered || !Rect(a.pos + a.move + aRects[ai].rect.Position, aRects[ai].rect.Size).Overlaps(bRect), "Mover entered collider illegally.");
-	#endif
+#endif
 								}
-					case (.Rect(let count, let rects), .Grid(let offset,let cellX,let cellY,let collide)):
-						// TODO
+						}
+					case (.Rect(let count, let rects), .Grid(let offset,let cellX,let cellY,let collide, let layer)):
+						for (let ai < count)
+						{
+							if (rects[ai].layer.Overlaps(layer))
+							{
+								let aRect = Rect(a.pos + rects[ai].rect.Position, rects[ai].rect.Size);
+								for (let y < 32)
+									for (let x < 32)
+										if (collide[y * 32 + x])
+										{
+#if DEBUG
+											bool dbgColliderEntered = false;
+#endif
+											let bRect = Rect(b.pos + offset + .(x * cellX, y * cellY), .(cellX, cellY));
+
+											CHECK:do if (!aRect.Overlaps(bRect) // Do not get stuck when already inside
+												&& CheckRects(aRect, bRect, a.move, let newHitPercent, let newHitEdge)
+												&& newHitPercent < hitPercent)
+											{
+												if ((rects[ai].solid & newHitEdge) == 0)
+												{
+#if DEBUG
+													dbgColliderEntered = true; // We entered the collider through a non-solid edge
+#endif
+													break CHECK;
+												}
+
+												aInfo = .()
+													{
+														iWasMoving = true,
+														myHitEdge = newHitEdge,
+														myColliderIndex = ai,
+														myDir = ((Vector2)a.move).Normalize(),
+
+														other = eOther,
+														otherWasMoving = otherMoving,
+														otherColliderIndex = y * 32 + x,
+														otherDir = ((Vector2)b.move).Normalize()
+													};
+
+												if (componentManager.GetComponentOptional<CollisionReceiveFeedback>(eOther, ?))
+												{
+													eHit = eOther;
+													bInfo = .()
+														{
+															iWasMoving = otherMoving,
+															myHitEdge = newHitEdge.Inverse,
+															myColliderIndex = y * 32 + x,
+															myDir = ((Vector2)b.move).Normalize(),
+
+															other = eMove,
+															otherWasMoving = true,
+															otherColliderIndex = ai,
+															otherDir = ((Vector2)a.move).Normalize()
+														};
+												}
+												
+												hitPercent = newHitPercent;
+												a.move = ((Vector2)a.move * hitPercent).Round();
+
+												moveChanged = true;
+											}
+#if DEBUG
+											else dbgColliderEntered = true; // We were already inside that collider before moving
+
+											Debug.Assert(dbgColliderEntered || !Rect(a.pos + a.move + rects[ai].rect.Position, rects[ai].rect.Size).Overlaps(bRect), "Mover entered collider illegally.");
+#endif
+										}
+							}
+						}
 					default: Debug.FatalError("Collider movement not implemented");
 					}
 
@@ -513,7 +607,7 @@ namespace Dimtoo
 			// Get bounds
 			switch (s.coll)
 			{
-			case .Grid(let offset,let cellX,let cellY,let collide):
+			case .Grid(let offset,let cellX,let cellY,let collide,?):
 				// Get grid tile bounds
 				Point2 min = .(32, 32), max = default;
 				for (let y < 32)

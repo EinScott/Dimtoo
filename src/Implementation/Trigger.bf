@@ -174,8 +174,8 @@ namespace Dimtoo
 										}
 									}
 								}
-						case .Grid(let offset,let cellX,let cellY,let collide):
-							Debug.FatalError();
+						case .Grid(let offset,let cellX,let cellY,let collide,let layer):
+							
 						}
 					}
 				}
