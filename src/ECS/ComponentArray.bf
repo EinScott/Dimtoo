@@ -4,12 +4,14 @@ using System.Diagnostics;
 
 namespace Dimtoo
 {
-	interface ComponentArrayBase
+	interface IComponentArrayBase
 	{
 		void OnEntityDestroyed(Entity e);
+
+		bool GetSerializeData(Entity e, out void* data);
 	}
 
-	class ComponentArray<T> : ComponentArrayBase where T : struct
+	class ComponentArray<T> : IComponentArrayBase where T : struct
 	{
 		T[MAX_ENTITIES] components;
 		readonly Dictionary<Entity, int> entityToIndex = new .() ~ delete _;
@@ -71,6 +73,18 @@ namespace Dimtoo
 			// If the entity had that component, remove it from us
 			if (entityToIndex.ContainsKey(e))
 				RemoveData(e);
+		}
+
+		[Inline]
+		public bool GetSerializeData(Entity e, out void* data)
+		{
+			if (entityToIndex.TryGetValue(e, let index))
+			{
+				data = &components[index];
+				return true;
+			}
+			data = null;
+			return false;
 		}
 	}
 }

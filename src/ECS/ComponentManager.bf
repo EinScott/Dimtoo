@@ -6,7 +6,7 @@ namespace Dimtoo
 {
 	class ComponentManager
 	{
-		readonly Dictionary<Type, (ComponentType type, ComponentArrayBase array)> componentArrays = new .() ~ {
+		readonly Dictionary<Type, (ComponentType type, IComponentArrayBase array)> componentArrays = new .() ~ {
 			for (let a in _)
 				delete a.value.array;
 			delete _;

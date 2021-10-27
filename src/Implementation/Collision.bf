@@ -20,6 +20,7 @@ namespace Dimtoo
 	// 	- if there would be multiple pushes across one frame, but taking multiple cycles here, maybe we need some prediction based on moverect??
 	//		-> maybe multiple pyhs update / move - cycles per update?
 
+	[CompSerializable]
 	struct CollisionBody
 	{
 		public Vector2 move;
@@ -51,25 +52,31 @@ namespace Dimtoo
 		}
 	}
 
-	struct LayerMask : uint64
+	[CompSerializable]
+	struct LayerMask
 	{
+		uint64 val;
+
 		public bool this[int layer]
 		{
 			[Inline]
-			get => (this & (uint64)(1 << layer)) > 0;
-			set mut => this |= (uint64)(1 << layer);
+			get => (val & (uint64)(1 << layer)) > 0;
+			set mut => val |= (uint64)(1 << layer);
 		}
 
-		public bool Overlaps(LayerMask other) => (this & other) > 0;
+		[Inline]
+		public bool Overlaps(LayerMask other) => (val & other.val) > 0;
 
+		[Inline]
 		public static implicit operator Self(uint64 i)
 		{
 			LayerMask m = default;
-			*(uint64*)&m = i;
+			m.val = i;
 			return m;
 		}
 	}
 
+	[CompSerializable]
 	struct ColliderRect
 	{
 		public this(Rect rect, Edge solid = .All, LayerMask layer = 0x1)
@@ -85,6 +92,7 @@ namespace Dimtoo
 	}
 
 	// Feedback of a body's own movement collision "it collides into something else"
+	[CompSerializable]
 	struct CollisionMoveFeedback
 	{
 		public CollisionInfo moveCollision;
@@ -98,6 +106,7 @@ namespace Dimtoo
 	}
 
 	// Feedback of a body's received collision "something else collides into it"
+	[CompSerializable]
 	struct CollisionReceiveFeedback
 	{
 		public int collisionCount;
@@ -116,6 +125,7 @@ namespace Dimtoo
 		}
 	}
 
+	[CompSerializable]
 	struct CollisionInfo
 	{
 		public Entity other;
@@ -214,7 +224,9 @@ namespace Dimtoo
 				if (componentManager.GetComponentOptional<CollisionReceiveFeedback>(e, let feedback))
 				{
 					feedback.collisionCount = 0;
+#if DEBUG // Technically we don't need to clear this, since we always override and check for count
 					feedback.collisions = .();
+#endif
 				}
 
 			for (let e in entities)

@@ -20,6 +20,8 @@ namespace Dimtoo
 		protected readonly ComponentManager compMan = new .() ~ delete _;
 		protected readonly EntityManager entMan = new .() ~ delete _;
 
+		protected readonly ComponentSerializer serializer = new .(compMan) ~ delete _;
+
 		[Inline]
 		public Entity CreateEntity() => entMan.CreateEntity();
 

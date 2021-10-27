@@ -4,6 +4,7 @@ using Pile;
 
 namespace Dimtoo
 {
+	[CompSerializable]
 	struct GridRenderer
 	{
 

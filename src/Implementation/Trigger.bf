@@ -4,15 +4,19 @@ using Pile;
 
 namespace Dimtoo
 {
-	// - triggers system! -- each component will know from state if an overlap is new or old!
-
+	[CompSerializable]
 	struct TriggerBody
 	{
 		public int triggerCount;
 		public TriggerRect[16] triggers;
 
 		public int overlapCount;
-		public TriggerCollisionInfo[32] overlaps;
+		public TriggerCollisionInfo[16] overlaps;
+		public int prevOverlapCount;
+		public TriggerCollisionInfo[16] prevOverlaps;
+
+		public int newOverlapCount;
+		public TriggerCollisionInfo[8] newOverlaps;
 
 		public this(params TriggerRect[] colls)
 		{
@@ -27,6 +31,7 @@ namespace Dimtoo
 		}
 	}
 
+	[CompSerializable]
 	struct TriggerRect
 	{
 		public this(Rect rect, LayerMask layer = 0x1)
@@ -39,13 +44,17 @@ namespace Dimtoo
 		public LayerMask layer;
 	}
 
-	// TODO: cobs move into triggers
-	struct TriggerEnterFeedback
+	[CompSerializable]
+	struct TriggerOverlapFeedback
 	{
 		public int overlapCount;
 		public TriggerCollisionInfo[16] overlaps;
+
+		public int newOverlapCount;
+		public TriggerCollisionInfo[8] newOverlaps;
 	}
 
+	[CompSerializable]
 	struct TriggerCollisionInfo
 	{
 		public Entity other;
@@ -54,7 +63,7 @@ namespace Dimtoo
 
 	class TriggerFeedbackSystem : ComponentSystem
 	{
-		static Type[?] wantsComponents = .(typeof(TriggerEnterFeedback));
+		static Type[?] wantsComponents = .(typeof(TriggerOverlapFeedback));
 		this
 		{
 			signatureTypes = wantsComponents;
@@ -66,11 +75,15 @@ namespace Dimtoo
 
 			for (let e in entities)
 			{
-				let feed = componentManager.GetComponent<TriggerEnterFeedback>(e);
+				let feed = componentManager.GetComponent<TriggerOverlapFeedback>(e);
 
-				// Reset overlaps?
-				feed.overlapCount = 0;
+				// Reset overlaps
+				feed.newOverlapCount = feed.overlapCount = 0;
+
+#if DEBUG // Technically we dont actually need to clear these, since we always override and check for count
 				feed.overlaps = .();
+				feed.newOverlaps = .();
+#endif
 			}
 		}
 	}
@@ -92,6 +105,9 @@ namespace Dimtoo
 
 		public void Render(Batch2D batch)
 		{
+			if (!debugRenderTriggers)
+				return;
+
 			for (let e in entities)
 			{
 				let tra = componentManager.GetComponent<Transform>(e);
@@ -113,8 +129,12 @@ namespace Dimtoo
 				let tra = componentManager.GetComponent<Transform>(e);
 				let trib = componentManager.GetComponent<TriggerBody>(e);
 
+				trib.prevOverlapCount = trib.overlapCount;
 				trib.overlapCount = 0;
+				trib.prevOverlaps = trib.overlaps;
+#if DEBUG
 				trib.overlaps = .();
+#endif
 
 				for (let eC in collSys.entities)
 				{
@@ -134,6 +154,8 @@ namespace Dimtoo
 
 									if (tRect.Overlaps(cRect))
 									{
+										Debug.Assert(trib.overlapCount < trib.overlaps.Count - 1, "Too many trigger overlaps to record in TriggerBody / TriggerOverlapFeedback");
+
 										trib.overlaps[trib.overlapCount++] = .()
 											{
 												other = eC,
@@ -141,7 +163,7 @@ namespace Dimtoo
 												otherColliderIndex = ci
 											};
 
-										if (componentManager.GetComponentOptional<TriggerEnterFeedback>(eC, let feedback))
+										if (componentManager.GetComponentOptional<TriggerOverlapFeedback>(eC, let feedback))
 										{
 											feedback.overlaps[feedback.overlapCount++] = .()
 												{
@@ -155,6 +177,41 @@ namespace Dimtoo
 						case .Grid(let offset,let cellX,let cellY,let collide):
 							Debug.FatalError();
 						}
+					}
+				}
+
+				trib.newOverlapCount = 0;
+#if DEBUG
+				trib.newOverlaps = .();
+#endif
+
+				for (let ci < trib.overlapCount)
+				{
+					let cOverlap = trib.overlaps[ci];
+					bool isOld = false;
+					for (let pi < trib.prevOverlapCount)
+					{
+						let pOverlap = trib.prevOverlaps[pi];
+
+						if (cOverlap.other == pOverlap.other && cOverlap.myColliderIndex == pOverlap.myColliderIndex && cOverlap.otherColliderIndex == pOverlap.otherColliderIndex)
+							isOld = true;
+					}
+
+					// This overlap is new, add it to the new list
+					if (!isOld)
+					{
+						Debug.Assert(trib.newOverlapCount < trib.newOverlaps.Count - 1, "Too many *new* trigger overlaps to record in TriggerBody / TriggerOverlapFeedback");
+
+						trib.newOverlaps[trib.newOverlapCount++] = cOverlap;
+
+						if (componentManager.GetComponentOptional<TriggerOverlapFeedback>(cOverlap.other, let feedback))
+							// Technically we've already added this to the feedback.overlaps list somewhere, but we're not going to search, just make it again
+							feedback.newOverlaps[feedback.newOverlapCount++] = .()
+								{
+									other = e,
+									myColliderIndex = cOverlap.otherColliderIndex,
+									otherColliderIndex = cOverlap.myColliderIndex
+								};
 					}
 				}
 			}
