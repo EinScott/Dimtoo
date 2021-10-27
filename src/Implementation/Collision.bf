@@ -34,7 +34,7 @@ namespace Dimtoo
 
 	enum Collider
 	{
-		case Rect(int count, ColliderRect[16] colliders);
+		case Rect(SizedList<ColliderRect, const 16> colliders);
 		case Grid(Point2 offset, uint8 cellX, uint8 cellY, bool[32*32] collide, LayerMask layer);
 
 		public Rect this[int index] =>
@@ -42,8 +42,8 @@ namespace Dimtoo
 			Rect res = default;
 			switch (this)
 			{
-			case .Rect(let count,let colliders):
-				Debug.Assert(index < count);
+			case .Rect(let colliders):
+				Debug.Assert(index < colliders.Count);
 				res = colliders[index].rect;
 			case .Grid(let offset,let cellX,let cellY,?,?):
 				let x = index % 32;
@@ -123,17 +123,16 @@ namespace Dimtoo
 	[CompSerializable]
 	struct CollisionReceiveFeedback
 	{
-		public int collisionCount;
-		public CollisionInfo[16] collisions;
+		public SizedList<CollisionInfo, const 16> collisions;
 
 		[Inline]
-		public bool Occured() => collisionCount > 0;
+		public bool Occured() => collisions.Count > 0;
 
 		[Inline]
 		public Edge GetHitEdges()
 		{
 			Edge res = .None;
-			for (let i < collisionCount)
+			for (let i < collisions.Count)
 				res |= collisions[i].myHitEdge;
 			return res;
 		}
@@ -191,12 +190,9 @@ namespace Dimtoo
 						for (let x < 32)
 							if (collide[y*32+x])
 								batch.HollowRect(.((origin + .(x*cellX,y*cellY)), size), 1, .Red);
-				case .Rect(let count,let rects):
-					for (let i < count)
-					{
-						let coll = rects[i];
+				case .Rect(let rects):
+					for (let coll in rects)
 						batch.HollowRect(.(tra.position.Round() + coll.rect.Position, coll.rect.Size), 1, .Red);
-					}
 				}
 			}
 		}
@@ -236,12 +232,7 @@ namespace Dimtoo
 		{
 			for (let e in entities)
 				if (componentManager.GetComponentOptional<CollisionReceiveFeedback>(e, let feedback))
-				{
-					feedback.collisionCount = 0;
-#if DEBUG // Technically we don't need to clear this, since we always override and check for count
-					feedback.collisions = .();
-#endif
-				}
+					feedback.collisions.Clear();
 
 			for (let e in entities)
 			{
@@ -350,23 +341,23 @@ namespace Dimtoo
 					bool moveChanged = false;
 					switch ((a.coll, b.coll))
 					{
-					case (.Rect(let aCount, let aRects), .Rect(let bCount,let bRects)):
-						for (let ai < aCount)
+					case (.Rect(let aRects), .Rect(let bRects)):
+						for (let aColl in aRects)
 						{
-							let aRect = Rect(a.pos + aRects[ai].rect.Position, aRects[ai].rect.Size);
-							for (let bi < bCount)
-								if (aRects[ai].layer.Overlaps(bRects[ai].layer))
+							let aRect = Rect(a.pos + aColl.rect.Position, aColl.rect.Size);
+							for (let bColl in bRects)
+								if (aColl.layer.Overlaps(bColl.layer))
 								{
 #if DEBUG
 									bool dbgColliderEntered = false;
 #endif
-									let bRect = Rect(b.pos + bRects[bi].rect.Position, bRects[bi].rect.Size);
+									let bRect = Rect(b.pos + bColl.rect.Position, bColl.rect.Size);
 	
 									CHECK:do if (!aRect.Overlaps(bRect) // Do not get stuck when already inside
 										&& CheckRects(aRect, bRect, a.move, let newHitPercent, let newHitEdge)
 										&& newHitPercent < hitPercent)
 									{
-										if ((aRects[ai].solid & newHitEdge) == 0 || (bRects[bi].solid & newHitEdge.Inverse) == 0)
+										if ((aColl.solid & newHitEdge) == 0 || (bColl.solid & newHitEdge.Inverse) == 0)
 										{
 #if DEBUG
 											dbgColliderEntered = true; // We entered the collider through a non-solid edge
@@ -378,12 +369,12 @@ namespace Dimtoo
 											{
 												iWasMoving = true,
 												myHitEdge = newHitEdge,
-												myColliderIndex = ai,
+												myColliderIndex = @aColl.Index,
 												myDir = ((Vector2)a.move).Normalize(),
 	
 												other = eOther,
 												otherWasMoving = otherMoving,
-												otherColliderIndex = bi,
+												otherColliderIndex = @bColl.Index,
 												otherDir = ((Vector2)b.move).Normalize()
 											};
 	
@@ -394,12 +385,12 @@ namespace Dimtoo
 												{
 													iWasMoving = otherMoving,
 													myHitEdge = newHitEdge.Inverse,
-													myColliderIndex = bi,
+													myColliderIndex = @bColl.Index,
 													myDir = ((Vector2)b.move).Normalize(),
 	
 													other = eMove,
 													otherWasMoving = true,
-													otherColliderIndex = ai,
+													otherColliderIndex = @aColl.Index,
 													otherDir = ((Vector2)a.move).Normalize()
 												};
 										}
@@ -412,16 +403,16 @@ namespace Dimtoo
 #if DEBUG
 									else dbgColliderEntered = true; // We were already inside that collider before moving
 	
-									Debug.Assert(dbgColliderEntered || !Rect(a.pos + a.move + aRects[ai].rect.Position, aRects[ai].rect.Size).Overlaps(bRect), "Mover entered collider illegally.");
+									Debug.Assert(dbgColliderEntered || !Rect(a.pos + a.move + aColl.rect.Position, aColl.rect.Size).Overlaps(bRect), "Mover entered collider illegally.");
 #endif
 								}
 						}
-					case (.Rect(let count, let rects), .Grid(let offset,let cellX,let cellY,let collide, let layer)):
-						for (let ai < count)
+					case (.Rect(let rects), .Grid(let offset,let cellX,let cellY,let collide, let layer)):
+						for (let aColl in rects)
 						{
-							if (rects[ai].layer.Overlaps(layer))
+							if (aColl.layer.Overlaps(layer))
 							{
-								let aRect = Rect(a.pos + rects[ai].rect.Position, rects[ai].rect.Size);
+								let aRect = Rect(a.pos + aColl.rect.Position, aColl.rect.Size);
 								for (let y < 32)
 									for (let x < 32)
 										if (collide[y * 32 + x])
@@ -435,7 +426,7 @@ namespace Dimtoo
 												&& CheckRects(aRect, bRect, a.move, let newHitPercent, let newHitEdge)
 												&& newHitPercent < hitPercent)
 											{
-												if ((rects[ai].solid & newHitEdge) == 0)
+												if ((aColl.solid & newHitEdge) == 0)
 												{
 #if DEBUG
 													dbgColliderEntered = true; // We entered the collider through a non-solid edge
@@ -447,7 +438,7 @@ namespace Dimtoo
 													{
 														iWasMoving = true,
 														myHitEdge = newHitEdge,
-														myColliderIndex = ai,
+														myColliderIndex = @aColl.Index,
 														myDir = ((Vector2)a.move).Normalize(),
 
 														other = eOther,
@@ -468,7 +459,7 @@ namespace Dimtoo
 
 															other = eMove,
 															otherWasMoving = true,
-															otherColliderIndex = ai,
+															otherColliderIndex = @aColl.Index,
 															otherDir = ((Vector2)a.move).Normalize()
 														};
 												}
@@ -481,7 +472,7 @@ namespace Dimtoo
 #if DEBUG
 											else dbgColliderEntered = true; // We were already inside that collider before moving
 
-											Debug.Assert(dbgColliderEntered || !Rect(a.pos + a.move + rects[ai].rect.Position, rects[ai].rect.Size).Overlaps(bRect), "Mover entered collider illegally.");
+											Debug.Assert(dbgColliderEntered || !Rect(a.pos + a.move + aColl.rect.Position, aColl.rect.Size).Overlaps(bRect), "Mover entered collider illegally.");
 #endif
 										}
 							}
@@ -502,10 +493,7 @@ namespace Dimtoo
 			{
 				// Since this was set, we know this exists on the entity
 				let feedback = componentManager.GetComponent<CollisionReceiveFeedback>(eHit);
-
-				Debug.Assert(feedback.collisionCount < feedback.collisions.Count - 1, "Too many collisions to record in receivedFeedback");
-
-				feedback.collisions[feedback.collisionCount++] = bInfo;
+				feedback.collisions.Add(bInfo);
 			}
 		}
 
@@ -632,8 +620,8 @@ namespace Dimtoo
 				size = max - min;
 
 				break;
-			case .Rect(let count, let colliders):
-				for (let i < Math.Min(count, colliders.Count))
+			case .Rect(let colliders):
+				for (let i < colliders.Count)
 				{
 					let boxOrig = pos + colliders[i].rect.Position;
 

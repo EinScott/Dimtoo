@@ -9,8 +9,7 @@ namespace Dimtoo
 
 	struct ContactBody
 	{
-		public int count;
-		public ContactInfo[16] data;
+		public SizedList<ContactInfo, const 16> data;
 		public Edge mask; // Quick overview of which edges are in contact
 	}
 
