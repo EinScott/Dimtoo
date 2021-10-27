@@ -13,7 +13,7 @@ namespace Dimtoo
 
 	// @report .Struct does not allow to place this attribute on structs deriving from primitives? A : int
 	[AttributeUsage(.Struct, .AlwaysIncludeTarget | .ReflectAttribute, ReflectUser = .AllMembers, AlwaysIncludeUser = .IncludeAllMethods | .AssumeInstantiated)]
-	struct CompSerializableAttribute : Attribute
+	struct SerializableAttribute : Attribute
 	{
 
 	}
@@ -41,7 +41,7 @@ namespace Dimtoo
 
 		bool Serialize(Type type, Variant component, String buffer)
 		{
-			if (!type.HasCustomAttribute<CompSerializableAttribute>())
+			if (!type.HasCustomAttribute<SerializableAttribute>())
 				return false;
 
 			type.GetName(buffer);
@@ -162,7 +162,7 @@ namespace Dimtoo
 			}
 		}
 
-		[CompSerializable,Ordered]
+		[Serializable,Ordered]
 		struct Rect
 		{
 			public int X;
@@ -171,13 +171,13 @@ namespace Dimtoo
 			public int Height;
 		}
 
-		[CompSerializable,Ordered]
+		[Serializable,Ordered]
 		struct Vector2
 		{
 			public float X, Y;
 		}
 
-		[CompSerializable,Ordered]
+		[Serializable,Ordered]
 		struct Point2
 		{
 			public int X, Y;

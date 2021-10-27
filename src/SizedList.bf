@@ -4,6 +4,7 @@ using System.Diagnostics;
 
 namespace Dimtoo
 {
+	[Serializable]
 	struct SizedList<T, Size> : IEnumerable<T> where Size : const int
 	{
 		int count;

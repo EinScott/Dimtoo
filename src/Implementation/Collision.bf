@@ -19,7 +19,7 @@ namespace Dimtoo
 	// 	- if there would be multiple pushes across one frame, but taking multiple cycles here, maybe we need some prediction based on moverect??
 	//		-> maybe multiple pyhs update / move - cycles per update?
 
-	[CompSerializable]
+	[Serializable]
 	struct CollisionBody
 	{
 		public Vector2 move;
@@ -61,7 +61,7 @@ namespace Dimtoo
 		}
 	}
 
-	[CompSerializable]
+	[Serializable]
 	struct LayerMask
 	{
 		public this(uint64 mask = 0x1)
@@ -90,7 +90,7 @@ namespace Dimtoo
 		}
 	}
 
-	[CompSerializable]
+	[Serializable]
 	struct ColliderRect
 	{
 		public this(Rect rect, Edge solid = .All, LayerMask layer = 0x1)
@@ -106,7 +106,7 @@ namespace Dimtoo
 	}
 
 	// Feedback of a body's own movement collision "it collides into something else"
-	[CompSerializable]
+	[Serializable]
 	struct CollisionMoveFeedback
 	{
 		public CollisionInfo moveCollision;
@@ -120,7 +120,7 @@ namespace Dimtoo
 	}
 
 	// Feedback of a body's received collision "something else collides into it"
-	[CompSerializable]
+	[Serializable]
 	struct CollisionReceiveFeedback
 	{
 		public SizedList<CollisionInfo, const 16> collisions;
@@ -138,7 +138,7 @@ namespace Dimtoo
 		}
 	}
 
-	[CompSerializable]
+	[Serializable]
 	struct CollisionInfo
 	{
 		public Entity other;

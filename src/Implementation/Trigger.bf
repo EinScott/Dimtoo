@@ -4,7 +4,7 @@ using Pile;
 
 namespace Dimtoo
 {
-	[CompSerializable]
+	[Serializable]
 	struct TriggerBody
 	{
 		public SizedList<TriggerRect, const 16> triggers;
@@ -23,7 +23,7 @@ namespace Dimtoo
 		}
 	}
 
-	[CompSerializable]
+	[Serializable]
 	struct TriggerRect
 	{
 		public this(Rect rect, LayerMask layer = 0x1)
@@ -36,14 +36,14 @@ namespace Dimtoo
 		public LayerMask layer;
 	}
 
-	[CompSerializable]
+	[Serializable]
 	struct TriggerOverlapFeedback
 	{
 		public SizedList<TriggerCollisionInfo, const 16> overlaps;
 		public SizedList<TriggerCollisionInfo, const 8> newOverlaps;
 	}
 
-	[CompSerializable]
+	[Serializable]
 	struct TriggerCollisionInfo
 	{
 		public Entity other;
