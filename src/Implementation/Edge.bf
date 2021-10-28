@@ -3,6 +3,7 @@ using Pile;
 
 namespace Dimtoo
 {
+	[Serializable]
 	enum Edge : uint8
 	{
 		case Top = 1;

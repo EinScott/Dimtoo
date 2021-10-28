@@ -126,63 +126,31 @@ namespace Dimtoo
 					{
 						let tRect = Rect(tra.position.Round() + trig.rect.Position, trig.rect.Size);
 
-						switch (cob.collider)
-						{
-						case .Rect(let colliders):
-							for (let coll in colliders)
-								if (trig.layer.Overlaps(coll.layer))
+						for (let coll in cob.colliders)
+							if (trig.layer.Overlaps(coll.layer))
+							{
+								let cRect = Rect(traC.position.Round() + coll.rect.Position, coll.rect.Size);
+
+								if (tRect.Overlaps(cRect))
 								{
-									let cRect = Rect(traC.position.Round() + coll.rect.Position, coll.rect.Size);
-
-									if (tRect.Overlaps(cRect))
-									{
-										trib.overlaps.Add(TriggerCollisionInfo()
-											{
-												other = eC,
-												myColliderIndex = @trig.Index,
-												otherColliderIndex = @coll.Index
-											});
-
-										if (componentManager.GetComponentOptional<TriggerOverlapFeedback>(eC, let feedback))
+									trib.overlaps.Add(TriggerCollisionInfo()
 										{
-											feedback.overlaps.Add(TriggerCollisionInfo()
-												{
-													other = e,
-													otherColliderIndex = @trig.Index,
-													myColliderIndex = @coll.Index
-												});
-										}
+											other = eC,
+											myColliderIndex = @trig.Index,
+											otherColliderIndex = @coll.Index
+										});
+
+									if (componentManager.GetComponentOptional<TriggerOverlapFeedback>(eC, let feedback))
+									{
+										feedback.overlaps.Add(TriggerCollisionInfo()
+											{
+												other = e,
+												otherColliderIndex = @trig.Index,
+												myColliderIndex = @coll.Index
+											});
 									}
 								}
-						case .Grid(let offset,let cellX,let cellY,let collide,let layer):
-							if (trig.layer.Overlaps(layer))
-								for (let y < 32)
-									for (let x < 32)
-										if (collide[y * 32 + x])
-										{
-											let cRect = Rect(traC.position.Round() + offset + .(x * cellX, y * cellY), .(cellX, cellY));
-	
-											if (tRect.Overlaps(cRect))
-											{
-												trib.overlaps.Add(TriggerCollisionInfo()
-													{
-														other = eC,
-														myColliderIndex = @trig.Index,
-														otherColliderIndex = y * 32 + x
-													});
-	
-												if (componentManager.GetComponentOptional<TriggerOverlapFeedback>(eC, let feedback))
-												{
-													feedback.overlaps.Add(TriggerCollisionInfo()
-														{
-															other = e,
-															otherColliderIndex = @trig.Index,
-															myColliderIndex = y * 32 + x
-														});
-												}
-											}
-										}
-						}
+							}
 					}
 				}
 

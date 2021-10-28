@@ -20,46 +20,32 @@ namespace Dimtoo
 	//		-> maybe multiple pyhs update / move - cycles per update?
 	//	(or just PreCollTick and PostCollTick) or similar!
 
+	typealias ColliderList = SizedList<ColliderRect, const 16>;
+
 	[Serializable]
 	struct CollisionBody
 	{
 		public Vector2 move;
-		public Collider collider;
+		public ColliderList colliders;
 
-		public this(Collider coll)
+		public this(ColliderList coll)
 		{
 			move = .Zero;
-			collider = coll;
+			colliders = coll;
+		}
+
+		public Rect GetCollider(int index)
+		{
+			Debug.Assert((uint)index < (uint)colliders.Count);
+			return colliders[index].rect;
 		}
 	}
 
-	enum Collider
+	[Serializable]
+	enum ColliderType
 	{
-		case Rect(SizedList<ColliderRect, const 16> colliders);
-		case Grid(Point2 offset, uint8 cellX, uint8 cellY, bool[32*32] collide, LayerMask layer);
-
-		public Rect this[int index] =>
-		{
-			Rect res = default;
-			switch (this)
-			{
-			case .Rect(let colliders):
-				Debug.Assert(index < colliders.Count);
-				res = colliders[index].rect;
-			case .Grid(let offset,let cellX,let cellY,?,?):
-				let x = index % 32;
-				let y = index - x;
-				res = .(offset + .(x * cellX, y * cellY), .(cellX, cellY));
-			}
-			res
-		};
-
-		[Inline]
-		public int GetGridIndex(int x, int y)
-		{
-			Debug.Assert(this case .Grid);
-			return y * 32 + x;
-		}
+		Rect,
+		Grid
 	}
 
 	[Serializable]
@@ -147,6 +133,7 @@ namespace Dimtoo
 		public Vector2 myDir, otherDir;
 		public Edge myHitEdge;
 		public int myColliderIndex, otherColliderIndex;
+		public ColliderType otherColliderType; // TODO
 
 		[Inline]
 		public bool Occured() => myDir != .Zero || otherDir != .Zero; // To collide, someone has to move.
@@ -182,31 +169,20 @@ namespace Dimtoo
 
 				batch.HollowRect(MakePathRect(PrepareResolveSet(tra, cob, ?)), 1, .Gray);
 
-				switch (cob.collider)
-				{
-				case .Grid(let offset,let cellX,let cellY,let collide, let layer):
-					let origin = tra.position.Round() + offset;
-					Point2 size = .(cellX, cellY);
-					for (let y < 32)
-						for (let x < 32)
-							if (collide[y*32+x])
-								batch.HollowRect(.((origin + .(x*cellX,y*cellY)), size), 1, .Red);
-				case .Rect(let rects):
-					for (let coll in rects)
-						batch.HollowRect(.(tra.position.Round() + coll.rect.Position, coll.rect.Size), 1, .Red);
-				}
+				for (let coll in cob.colliders)
+					batch.HollowRect(.(tra.position.Round() + coll.rect.Position, coll.rect.Size), 1, .Red);
 			}
 		}
 
 		// @report: neither renaming tuple members or these tyaliases works properly
 		// also look why rebuilding still fails on comptime & data cycles sometimes happen (look at newest fusion issue, might by the same??)
-		typealias ResolveSet = (Collider coll, Point2 move, Point2 pos);
+		typealias ResolveSet = (ColliderList coll, Point2 move, Point2 pos);
 
 		static ResolveSet PrepareResolveSet(Transform* tra, CollisionBody* body, out Vector2 newPos)
 		{
 			// We move in whole pixels only, so prepare for that here!
 			ResolveSet a;
-			a.coll = body.collider;
+			a.coll = body.colliders;
 			a.pos = tra.position.Round();
 			a.move = body.move.Round();
 
@@ -229,7 +205,7 @@ namespace Dimtoo
 		}
 
 		[PerfTrack,Optimize]
-		public void Resolve()
+		public void Resolve(GridSystem gridSys)
 		{
 			for (let e in entities)
 				if (componentManager.GetComponentOptional<CollisionReceiveFeedback>(e, let feedback))
@@ -249,7 +225,7 @@ namespace Dimtoo
 
 				// Move info
 				Point2 currMove = a.move;
-				CheckMove(e, ref a, let moveInfo);
+				CheckMove(e, ref a, let moveInfo, gridSys);
 
 				Point2 slideMove = ?;
 				bool doSlide = true;
@@ -276,7 +252,7 @@ namespace Dimtoo
 					a.pos += a.move;
 					a.move = slideMove;
 
-					CheckMove(e, ref a, out slideInfo);
+					CheckMove(e, ref a, out slideInfo, gridSys);
 
 					a.move += currMove; // Add back onto confirmed slide move to get the full movement
 				}
@@ -294,7 +270,7 @@ namespace Dimtoo
 		}
 		
 		[Optimize]
-		void CheckMove(Entity eMove, ref ResolveSet a, out CollisionInfo aInfo)
+		void CheckMove(Entity eMove, ref ResolveSet a, out CollisionInfo aInfo, GridSystem gridSys)
 		{
 			var moverPathRect = MakePathRect(a);
 
@@ -351,146 +327,175 @@ namespace Dimtoo
 					}
 
 					bool moveChanged = false;
-					switch ((a.coll, b.coll))
+					for (let aColl in a.coll)
 					{
-					case (.Rect(let aRects), .Rect(let bRects)):
-						for (let aColl in aRects)
+						let aRect = Rect(a.pos + aColl.rect.Position, aColl.rect.Size);
+						for (let bColl in b.coll)
+							if (aColl.layer.Overlaps(bColl.layer))
+							{
+#if DEBUG
+								bool dbgColliderEntered = false;
+#endif
+								let bRect = Rect(b.pos + bColl.rect.Position, bColl.rect.Size);
+
+								CHECK:do if (!aRect.Overlaps(bRect) // Do not get stuck when already inside
+									&& CheckRects(aRect, bRect, a.move, let newHitPercent, let newHitEdge)
+									&& newHitPercent < hitPercent)
+								{
+									if ((aColl.solid & newHitEdge) == 0 || (bColl.solid & newHitEdge.Inverse) == 0)
+									{
+#if DEBUG
+										dbgColliderEntered = true; // We entered the collider through a non-solid edge
+#endif
+										break CHECK;
+									}
+
+									aInfo = .()
+										{
+											iWasMoving = true,
+											myHitEdge = newHitEdge,
+											myColliderIndex = @aColl.[Inline]Index,
+											myDir = ((Vector2)a.move).Normalize(),
+
+											other = eOther,
+											otherWasMoving = otherMoving,
+											otherColliderIndex = @bColl.[Inline]Index,
+											otherDir = ((Vector2)b.move).Normalize(),
+											otherColliderType = .Rect
+										};
+
+									if (componentManager.GetComponentOptional<CollisionReceiveFeedback>(eOther, ?))
+									{
+										eHit = eOther;
+										bInfo = .()
+											{
+												iWasMoving = otherMoving,
+												myHitEdge = newHitEdge.Inverse,
+												myColliderIndex = @bColl.[Inline]Index,
+												myDir = ((Vector2)b.move).Normalize(),
+
+												other = eMove,
+												otherWasMoving = true,
+												otherColliderIndex = @aColl.[Inline]Index,
+												otherDir = ((Vector2)a.move).Normalize(),
+												otherColliderType = .Rect
+											};
+									}
+									
+									hitPercent = newHitPercent;
+									a.move = ((Vector2)a.move * hitPercent).Round();
+
+									moveChanged = true;
+								}
+#if DEBUG
+								else dbgColliderEntered = true; // We were already inside that collider before moving
+
+								Debug.Assert(dbgColliderEntered || !Rect(a.pos + a.move + aColl.rect.Position, aColl.rect.Size).Overlaps(bRect), "Mover entered collider illegally.");
+#endif
+							}
+					}
+
+					if (moveChanged)
+					{
+						// Update pathRect based on new move
+						moverPathRect = MakePathRect(a);
+					}
+				}
+			}
+
+			for (let eOther in gridSys.entities)
+			{
+				if (eMove == eOther)
+					continue; // b is not a!
+
+				let bGri = componentManager.GetComponent<Grid>(eOther);
+				let bTra = componentManager.GetComponent<Transform>(eOther);
+				
+				let bPos = bTra.position.Round();
+				let checkRect = bGri.GetBounds(bPos);
+
+				if (moverPathRect.Overlaps(checkRect))
+				{
+					let bounds = bGri.GetCellBounds();
+					bool moveChanged = false;
+
+					// TODO:
+					// dont actually iterate through the whole grid!
+					// -> the moverect can just literally tell us which tiles we have to check to
+					// further shrink down bounds!
+
+					// TODO: we can sometimes clip through tiles when jumping??
+					// seems to be legit by the CheckRects-if too, which is weird
+
+					for (let aColl in a.coll)
+						if (aColl.layer.Overlaps(bGri.layer))
 						{
 							let aRect = Rect(a.pos + aColl.rect.Position, aColl.rect.Size);
-							for (let bColl in bRects)
-								if (aColl.layer.Overlaps(bColl.layer))
-								{
-#if DEBUG
-									bool dbgColliderEntered = false;
-#endif
-									let bRect = Rect(b.pos + bColl.rect.Position, bColl.rect.Size);
-	
-									CHECK:do if (!aRect.Overlaps(bRect) // Do not get stuck when already inside
-										&& CheckRects(aRect, bRect, a.move, let newHitPercent, let newHitEdge)
-										&& newHitPercent < hitPercent)
+							for (var y = bounds.Y; y < bounds.Y + bounds.Height; y++)
+								for (var x = bounds.X; x < bounds.X + bounds.Width; x++)
+									if (bGri.cells[y][x])
 									{
-										if ((aColl.solid & newHitEdge) == 0 || (bColl.solid & newHitEdge.Inverse) == 0)
-										{
 #if DEBUG
-											dbgColliderEntered = true; // We entered the collider through a non-solid edge
+										bool dbgColliderEntered = false;
 #endif
-											break CHECK;
-										}
-	
-										aInfo = .()
+										let bRect = bGri.GetCollider(x, y, bPos);
+
+										CHECK:do if (!aRect.Overlaps(bRect) // Do not get stuck when already inside
+											&& CheckRects(aRect, bRect, a.move, let newHitPercent, let newHitEdge)
+											&& newHitPercent < hitPercent)
+										{
+											if ((aColl.solid & newHitEdge) == 0)
 											{
-												iWasMoving = true,
-												myHitEdge = newHitEdge,
-												myColliderIndex = @aColl.Index,
-												myDir = ((Vector2)a.move).Normalize(),
-	
-												other = eOther,
-												otherWasMoving = otherMoving,
-												otherColliderIndex = @bColl.Index,
-												otherDir = ((Vector2)b.move).Normalize()
-											};
-	
-										if (componentManager.GetComponentOptional<CollisionReceiveFeedback>(eOther, ?))
-										{
-											eHit = eOther;
-											bInfo = .()
-												{
-													iWasMoving = otherMoving,
-													myHitEdge = newHitEdge.Inverse,
-													myColliderIndex = @bColl.Index,
-													myDir = ((Vector2)b.move).Normalize(),
-	
-													other = eMove,
-													otherWasMoving = true,
-													otherColliderIndex = @aColl.Index,
-													otherDir = ((Vector2)a.move).Normalize()
-												};
-										}
-										
-										hitPercent = newHitPercent;
-										a.move = ((Vector2)a.move * hitPercent).Round();
-	
-										moveChanged = true;
-									}
 #if DEBUG
-									else dbgColliderEntered = true; // We were already inside that collider before moving
-	
-									Debug.Assert(dbgColliderEntered || !Rect(a.pos + a.move + aColl.rect.Position, aColl.rect.Size).Overlaps(bRect), "Mover entered collider illegally.");
+												dbgColliderEntered = true; // We entered the collider through a non-solid edge
 #endif
-								}
-						}
-					case (.Rect(let rects), .Grid(let offset,let cellX,let cellY,let collide, let layer)):
-						for (let aColl in rects)
-						{
-							if (aColl.layer.Overlaps(layer))
-							{
-								let aRect = Rect(a.pos + aColl.rect.Position, aColl.rect.Size);
-								for (let y < 32)
-									for (let x < 32)
-										if (collide[y * 32 + x])
-										{
-#if DEBUG
-											bool dbgColliderEntered = false;
-#endif
-											let bRect = Rect(b.pos + offset + .(x * cellX, y * cellY), .(cellX, cellY));
-
-											CHECK:do if (!aRect.Overlaps(bRect) // Do not get stuck when already inside
-												&& CheckRects(aRect, bRect, a.move, let newHitPercent, let newHitEdge)
-												&& newHitPercent < hitPercent)
-											{
-												if ((aColl.solid & newHitEdge) == 0)
-												{
-#if DEBUG
-													dbgColliderEntered = true; // We entered the collider through a non-solid edge
-#endif
-													break CHECK;
-												}
-
-												aInfo = .()
-													{
-														iWasMoving = true,
-														myHitEdge = newHitEdge,
-														myColliderIndex = @aColl.Index,
-														myDir = ((Vector2)a.move).Normalize(),
-
-														other = eOther,
-														otherWasMoving = otherMoving,
-														otherColliderIndex = y * 32 + x,
-														otherDir = ((Vector2)b.move).Normalize()
-													};
-
-												if (componentManager.GetComponentOptional<CollisionReceiveFeedback>(eOther, ?))
-												{
-													eHit = eOther;
-													bInfo = .()
-														{
-															iWasMoving = otherMoving,
-															myHitEdge = newHitEdge.Inverse,
-															myColliderIndex = y * 32 + x,
-															myDir = ((Vector2)b.move).Normalize(),
-
-															other = eMove,
-															otherWasMoving = true,
-															otherColliderIndex = @aColl.Index,
-															otherDir = ((Vector2)a.move).Normalize()
-														};
-												}
-												
-												hitPercent = newHitPercent;
-												a.move = ((Vector2)a.move * hitPercent).Round();
-
-												moveChanged = true;
+												break CHECK;
 											}
-#if DEBUG
-											else dbgColliderEntered = true; // We were already inside that collider before moving
 
-											Debug.Assert(dbgColliderEntered || !Rect(a.pos + a.move + aColl.rect.Position, aColl.rect.Size).Overlaps(bRect), "Mover entered collider illegally.");
-#endif
+											aInfo = .()
+												{
+													iWasMoving = true,
+													myHitEdge = newHitEdge,
+													myColliderIndex = @aColl.[Inline]Index,
+													myDir = ((Vector2)a.move).Normalize(),
+
+													other = eOther,
+													otherWasMoving = false,
+													otherColliderIndex = y * 32 + x,
+													otherDir = .Zero,
+													otherColliderType = .Grid
+												};
+
+											if (componentManager.GetComponentOptional<CollisionReceiveFeedback>(eOther, ?))
+											{
+												eHit = eOther;
+												bInfo = .()
+													{
+														iWasMoving = false,
+														myHitEdge = newHitEdge.Inverse,
+														myColliderIndex = y * 32 + x,
+														myDir = .Zero,
+
+														other = eMove,
+														otherWasMoving = true,
+														otherColliderIndex = @aColl.[Inline]Index,
+														otherDir = ((Vector2)a.move).Normalize(),
+														otherColliderType = .Rect
+													};
+											}
+											
+											hitPercent = newHitPercent;
+											a.move = ((Vector2)a.move * hitPercent).Round();
+
+											moveChanged = true;
 										}
+#if DEBUG
+										else dbgColliderEntered = true; // We were already inside that collider before moving
+
+										Debug.Assert(dbgColliderEntered || !Rect(a.pos + a.move + aColl.rect.Position, aColl.rect.Size).Overlaps(bRect), "Mover entered collider illegally.");
+#endif
+									}
 							}
-						}
-					default: Debug.FatalError("Collider movement not implemented");
-					}
 
 					if (moveChanged)
 					{
@@ -598,59 +603,29 @@ namespace Dimtoo
 
 		[Optimize]
 		// For non-mover entities, this just returns bounds
-		static Rect MakePathRect(ResolveSet s)
+		public static Rect MakePathRect(ResolveSet s)
 		{
 			let pos = s.pos;
 			var origin = pos;
 			var size = Point2.Zero;
 
 			// Get bounds
-			switch (s.coll)
+			for (let coll in s.coll)
 			{
-			case .Grid(let offset,let cellX,let cellY,let collide,?):
-				// Get grid tile bounds
-				Point2 min = .(32, 32), max = default;
-				for (let y < 32)
-					for (let x < 32)
-						if (collide[y * 32 + x])
-						{
-							if (x < min.X) min.X = x;
-							if (x > max.X) max.X = x;
+				let boxOrig = pos + coll.rect.Position;
 
-							if (y < min.Y) min.Y = y;
-							if (y > max.Y) max.Y = y;
-						}
+				// Leftmost corner
+				if (boxOrig.X < origin.X)
+					origin.X = boxOrig.X;
+				if (boxOrig.Y < origin.Y)
+					origin.Y = boxOrig.Y;
 
-				min *= cellX;
-				max *= cellY;
-				min -= offset;
-				max -= offset;
-
-				max += .(cellX, cellY);
-
-				origin += min;
-				size = max - min;
-
-				break;
-			case .Rect(let colliders):
-				for (let i < colliders.Count)
-				{
-					let boxOrig = pos + colliders[i].rect.Position;
-
-					// Leftmost corner
-					if (boxOrig.X < origin.X)
-						origin.X = boxOrig.X;
-					if (boxOrig.Y < origin.Y)
-						origin.Y = boxOrig.Y;
-
-					// Size
-					let boxSize = colliders[i].rect.Size;
-					if (boxOrig.X + boxSize.X > origin.X + size.X)
-						size.X = boxSize.X;
-					if (boxOrig.Y + boxSize.Y > origin.Y + size.Y)
-						size.Y = boxSize.Y;
-				}
-				break;
+				// Size
+				let boxSize = coll.rect.Size;
+				if (boxOrig.X + boxSize.X > origin.X + size.X)
+					size.X = boxSize.X;
+				if (boxOrig.Y + boxSize.Y > origin.Y + size.Y)
+					size.Y = boxSize.Y;
 			}
 
 			// Expand by movement

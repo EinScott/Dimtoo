@@ -12,7 +12,7 @@ namespace Dimtoo
 	// do full scene serialize / deserialize
 
 	// @report .Struct does not allow to place this attribute on structs deriving from primitives? A : int
-	[AttributeUsage(.Struct, .AlwaysIncludeTarget | .ReflectAttribute, ReflectUser = .AllMembers, AlwaysIncludeUser = .IncludeAllMethods | .AssumeInstantiated)]
+	[AttributeUsage(.Struct|.Enum, .AlwaysIncludeTarget | .ReflectAttribute, ReflectUser = .AllMembers, AlwaysIncludeUser = .IncludeAllMethods | .AssumeInstantiated)]
 	struct SerializableAttribute : Attribute
 	{
 
@@ -38,6 +38,10 @@ namespace Dimtoo
 
 			buffer.Append("]");
 		}
+
+		// TODO: explicit option to include everything, otherwise just include
+		// non zero stuff? we'll set the structs to default when loading anyway, so 0
+		// isnt of much significance as a value
 
 		bool Serialize(Type type, Variant component, String buffer)
 		{
@@ -149,20 +153,20 @@ namespace Dimtoo
 			switch (fieldType)
 			{
 			case typeof(Pile.Rect):
-				val.[Friend]mStructType = (int)Internal.UnsafeCastToPtr(typeof(Rect)) & ~1;
+				val.[Friend]mStructType = ((int)Internal.UnsafeCastToPtr(typeof(Rect)) & ~1) + (val.[Friend]mStructType & 1);
 				return Serialize(typeof(Rect), val, buffer);
 			case typeof(Pile.Vector2):
-				val.[Friend]mStructType = (int)Internal.UnsafeCastToPtr(typeof(Vector2)) & ~1;
+				val.[Friend]mStructType = ((int)Internal.UnsafeCastToPtr(typeof(Vector2)) & ~1) + (val.[Friend]mStructType & 1);
 				return Serialize(typeof(Vector2), val, buffer);
 			case typeof(Pile.Point2):
-				val.[Friend]mStructType = (int)Internal.UnsafeCastToPtr(typeof(Point2)) & ~1;
+				val.[Friend]mStructType = ((int)Internal.UnsafeCastToPtr(typeof(Point2)) & ~1) + + (val.[Friend]mStructType & 1);
 				return Serialize(typeof(Point2), val, buffer);
 			default:
 				return Serialize(fieldType, val, buffer);
 			}
 		}
 
-		[Serializable,Ordered]
+		[Serializable]
 		struct Rect
 		{
 			public int X;
@@ -171,13 +175,13 @@ namespace Dimtoo
 			public int Height;
 		}
 
-		[Serializable,Ordered]
+		[Serializable]
 		struct Vector2
 		{
 			public float X, Y;
 		}
 
-		[Serializable,Ordered]
+		[Serializable]
 		struct Point2
 		{
 			public int X, Y;
