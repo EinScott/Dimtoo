@@ -427,6 +427,8 @@ namespace Dimtoo
 					// TODO: we can sometimes clip through tiles when jumping??
 					// seems to be legit by the CheckRects-if too, which is weird
 
+					// we also still get stuck on the edges of two colliders when we slide along, even though we just slide further
+
 					for (let aColl in a.coll)
 						if (aColl.layer.Overlaps(bGri.layer))
 						{
@@ -527,8 +529,8 @@ namespace Dimtoo
 			// a moves right
 			if (movement.X > 0)
 			{
-				if (b.Right < a.Left) return false; // a is already right of b
-				if (b.Right >= a.Left) outPercent = Math.Min((a.Left - b.Right) / -(float)movement.X, outPercent); // a is inside or left of b
+				if (b.Right <= a.Left) return false; // a is already right of b
+				if (b.Right > a.Left) outPercent = Math.Min((a.Left - b.Right) / -(float)movement.X, outPercent); // a is inside or left of b
 
 				if (a.Right <= b.Left) // a is left of b
 				{
@@ -540,8 +542,8 @@ namespace Dimtoo
 			// a moves left
 			else if (movement.X < 0)
 			{
-				if (b.Left > a.Right) return false; // a is already left of b
-				if (b.Left <= a.Right) outPercent = Math.Min((a.Right - b.Left) / -(float)movement.X, outPercent); // a is inside or right of b
+				if (b.Left >= a.Right) return false; // a is already left of b
+				if (b.Left < a.Right) outPercent = Math.Min((a.Right - b.Left) / -(float)movement.X, outPercent); // a is inside or right of b
 
 				if (a.Left >= b.Right) // a is right of b
 				{
@@ -566,8 +568,8 @@ namespace Dimtoo
 			// a moves down
 			if (movement.Y > 0)
 			{
-				if (b.Bottom < a.Top) return false; // a is already under b
-				if (b.Bottom >= a.Top) outPercent = Math.Min((a.Top - b.Bottom) / -(float)movement.Y, outPercent); // a is inside or above b
+				if (b.Bottom <= a.Top) return false; // a is already under b
+				if (b.Bottom > a.Top) outPercent = Math.Min((a.Top - b.Bottom) / -(float)movement.Y, outPercent); // a is inside or above b
 
 				if (a.Bottom <= b.Top) // a is above b
 				{
@@ -579,8 +581,8 @@ namespace Dimtoo
 			// a moves up
 			else if (movement.Y < 0)
 			{
-				if (b.Top > a.Bottom) return false; // a is already above b
-				if (b.Top <= a.Bottom) outPercent = Math.Min((a.Bottom - b.Top) / -(float)movement.Y, outPercent); // a is inside or under b
+				if (b.Top >= a.Bottom) return false; // a is already above b
+				if (b.Top < a.Bottom) outPercent = Math.Min((a.Bottom - b.Top) / -(float)movement.Y, outPercent); // a is inside or under b
 
 				if (a.Top >= b.Bottom) // a is under b
 				{

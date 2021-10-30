@@ -7,32 +7,6 @@ namespace Dimtoo
 {
 	class Sprite
 	{
-		public struct Animation
-		{
-			public readonly int From;
-			public readonly int To;
-
-			public this(int from, int to)
-			{
-				From = from;
-				To = to;
-			}
-		}
-
-		public struct Frame
-		{
-			public readonly Subtexture Texture;
-			public readonly int Duration;
-
-			public this(Subtexture texture, int duration)
-			{
-				Texture = texture;
-				Duration = duration;
-			}
-
-			public static operator Subtexture(Frame frame) => frame.Texture;
-		}
-
 		Frame[] frames ~ delete _;
 		Dictionary<String,Animation> animations ~ delete _;
 		

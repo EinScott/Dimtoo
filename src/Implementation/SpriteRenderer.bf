@@ -25,6 +25,8 @@ namespace Dimtoo
 
 		public void Render(Batch2D batch)
 		{
+			// TODO: render only what we see. same goes for tiles
+
 			for (let e in entities)
 			{
 				let spr = componentManager.GetComponent<SpriteRenderer>(e);
