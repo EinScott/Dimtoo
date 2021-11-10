@@ -2,21 +2,20 @@ using System;
 
 namespace Dimtoo
 {
-	// @report: this was Signature : uint64 directly before, but this |= x didnt actually affect it
 	struct Signature
 	{
 		uint64 val;
 
 		[Inline]
-		public void Add(uint8 bit) mut
+		public void Add(ComponentType type) mut
 		{
-			val |= (1 << bit);
+			val |= (1 << type);
 		}
 
 		[Inline]
-		public void Remove(uint8 bit) mut
+		public void Remove(ComponentType type) mut
 		{
-			val = val & ~(1 << bit);
+			val = val & ~(1 << type);
 		}
 
 		[Inline]

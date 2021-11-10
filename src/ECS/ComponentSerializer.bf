@@ -7,11 +7,9 @@ using System.Reflection;
 
 namespace Dimtoo
 {
-	// TODO: rect values seem to wrong, why?
-	// do deserialize / create entity from string
+	// TODO: do deserialize / create entity from string
 	// do full scene serialize / deserialize
 
-	// @report .Struct does not allow to place this attribute on structs deriving from primitives? A : int
 	[AttributeUsage(.Struct|.Enum, .AlwaysIncludeTarget | .ReflectAttribute, ReflectUser = .AllMembers, AlwaysIncludeUser = .IncludeAllMethods | .AssumeInstantiated)]
 	struct SerializableAttribute : Attribute
 	{

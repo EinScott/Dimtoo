@@ -111,17 +111,16 @@ namespace Dimtoo
 			{
 				let tra = componentManager.GetComponent<Transform>(e);
 				let gri = componentManager.GetComponent<Grid>(e);
-
-				batch.HollowRect(gri.GetBounds(tra.position.Round()), 1, .Gray);
+				
+				let pos = tra.position.Round();
+				batch.HollowRect(gri.GetBounds(pos), 1, .Gray);
 
 				// TODO: optimize, this renders way too much
-				let origin = tra.position.Round() + gri.offset;
-				Point2 size = gri.cellSize;
 				let bounds = gri.GetCellBounds();
 				for (var y = bounds.Y; y < bounds.Y + bounds.Height; y++)
 					for (var x = bounds.X; x < bounds.X + bounds.Width; x++)
 						if (gri.cells[y][x])
-							batch.HollowRect(.((origin + .(x,y) * gri.cellSize), size), 1, .Red);
+							batch.HollowRect(gri.GetCollider(x, y, pos), 1, .Red);
 			}
 		}
 

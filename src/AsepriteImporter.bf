@@ -80,6 +80,8 @@ namespace Dimtoo
 	[RegisterImporter]
 	class AsepriteTilesetImporter : Importer
 	{
+		public bool RebuildOnAdditionalChanged => true;
+
 		public String Name => "aseTile";
 
 		public Result<void> Load(StringView name, Span<uint8> data)
