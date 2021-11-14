@@ -7,8 +7,7 @@ namespace Dimtoo
 {
 	// Unconventional 2d collision detection & response
 
-	// TODO: (generally) maybe replace all these arrays with StaticList<T> which would just be a fixedcapacity list
-	// also replace these for outer loops with stuff that loads the loop body as a anon function off to a threadpool?
+	// TODO: replace these for outer loops with stuff that loads the loop body as a anon function off to a threadpool?
 	// -> at least test if thats faster
 
 	// !! if we have a contact in the direction we're currently moving in, even if we dont trigger a collision (due to rounding / floats),
@@ -238,38 +237,107 @@ namespace Dimtoo
 
 				// Move info
 				Point2 currMove = a.move;
-				CheckMove(e, ref a, let moveInfo, gridSys);
-
-				Point2 slideMove = ?;
-				bool doSlide = true;
-				switch (moveInfo.myHitEdge)
-				{
-				case .Left, .Right:
-					slideMove.X = 0;
-					slideMove.Y = currMove.Y;
-				case .Top, .Bottom:
-					slideMove.X = currMove.X;
-					slideMove.Y = 0;
-				case .None:
-					doSlide = false;
-				default:
-					Debug.FatalError();
-				}
+				CheckMove(e, ref a, var moveInfo, gridSys);
 
 				CollisionInfo slideInfo;
-				if (doSlide)
 				{
-					currMove = a.move; // Save this here for later
+					let hitX = ((moveInfo.myHitEdge & .Left) != 0 || (moveInfo.myHitEdge & .Right) != 0);
+					let hitY = ((moveInfo.myHitEdge & .Top) != 0 || (moveInfo.myHitEdge & .Bottom) != 0);
 
-					// Set up for slide simulate, pseudo-move to already confirmed position
-					a.pos += a.move;
-					a.move = slideMove;
+					switch ((hitX, hitY))
+					{
+					case (true, false):
+						DoSlide(e, ref a, .(0, currMove.Y), out slideInfo, gridSys);
+					case (false, true):
+						DoSlide(e, ref a, .(currMove.X, 0), out slideInfo, gridSys);
+					case (true, true): // We hit a corner!
+						Point2 primCheck, secCheck;
+						let xIsPrimaryMove = Math.Abs(currMove.X) > Math.Abs(currMove.Y);
+						if (xIsPrimaryMove)
+						{
+							primCheck = .(currMove.X, 0);
+							secCheck = .(0, currMove.Y);
+						}
+						else
+						{
+							primCheck = .(0, currMove.Y);
+							secCheck = .(currMove.X, 0);
+						}
 
-					CheckMove(e, ref a, out slideInfo, gridSys);
+						let equalMove = Math.Abs(currMove.X) == Math.Abs(currMove.Y);
 
-					a.move += currMove; // Add back onto confirmed slide move to get the full movement
+						let establishedMove = a.move; // Result from the first move check, save for later
+
+						// Set up for slide simulate, pseudo-move to already confirmed position
+						a.pos += a.move;
+						a.move = primCheck;
+
+						CheckMove(e, ref a, out slideInfo, gridSys);
+
+						if (a.move == .Zero || equalMove) // Check second one, if first side blocks or we move equally in both directions
+						{
+							// Save for later compare
+							let primInfo = slideInfo;
+							let primMove = a.move;
+
+							a.move = secCheck;
+
+							CheckMove(e, ref a, out slideInfo, gridSys);
+
+							if (equalMove) // We move equally to both sides from the corner, and could also go to both
+							{
+								// NOTE: in here, primCheck is ALWAYS the Y movement!
+
+								// This is to avoid getting stuck on corners where adjacent colliders actually form a continuous edge
+								// and where we thus should not get stuck, so we have to check both options and decide here
+
+								if (a.move != .Zero && primMove != .Zero)
+									a.move = .Zero; // We perfectly hit the corner, do nothing! (and also leave both edges)
+								else if (a.move == .Zero)
+								{
+									// We cannot move according to secCheck, so revert to primCheck which worked!
+									a.move = primMove;
+									slideInfo = primInfo;
+
+									moveInfo.myHitEdge &= ~(.Top|.Bottom); // -> hit x edge, slide along y, so those don't matter (see NOTE)
+								}
+								else
+								{
+									// secCheck is the only valid move, and will be applied
+
+									moveInfo.myHitEdge &= ~(.Right|.Left); // -> hit y edge, slide along x, so those don't matter
+								}
+							}
+							else
+							{
+								// Leave the final moveInfo with only the edge we actually ended up sliding along!
+
+								if (a.move != .Zero)
+								{
+									if (!xIsPrimaryMove) // INVERTED copy pase from below!
+										moveInfo.myHitEdge &= ~(.Right|.Left); // -> hit y edge, slide along x, so those don't matter
+									else moveInfo.myHitEdge &= ~(.Top|.Bottom); // -> hit x edge, slide along y, so those don't matter
+								}
+								else slideInfo = .(); // No sliding took place! (and so leave both hitEdges registered)
+							}
+
+							// When we already had a clear preference to one side in the movement, doing the second check was necessary
+							// and therefore this result can just be applied without further checks
+						}
+						else
+						{
+							// Leave the final moveInfo with only the edge we actually ended up sliding along!
+
+							if (xIsPrimaryMove)
+								moveInfo.myHitEdge &= ~(.Right|.Left); // -> hit y edge, slide along x, so those don't matter
+							else moveInfo.myHitEdge &= ~(.Top|.Bottom); // -> hit x edge, slide along y, so those don't matter
+						}
+
+						a.move += establishedMove; // Add back onto confirmed slide move to get the full movement
+					default:
+						slideInfo = .();
+					}
 				}
-				else slideInfo = .();
 
 				if (componentManager.GetComponentOptional<CollisionMoveFeedback>(e, let collFeedback))
 				{
@@ -287,12 +355,23 @@ namespace Dimtoo
 #endif
 		}
 
+		[Inline]
+		void DoSlide(Entity e, ref ResolveSet a, Point2 slideMove, out CollisionInfo slideInfo, GridSystem gridSys)
+		{
+			let establishedMove = a.move; // Save this here for later
+
+			// Set up for slide simulate, pseudo-move to already confirmed position
+			a.pos += a.move;
+			a.move = slideMove;
+
+			CheckMove(e, ref a, out slideInfo, gridSys);
+
+			a.move += establishedMove; // Add back onto confirmed slide move to get the full movement
+		}
+
 		[Optimize]
 		void CheckMove(Entity eMove, ref ResolveSet a, out CollisionInfo aInfo, GridSystem gridSys)
 		{
-			// TODO: you can sometimes
-			// phase trough rects?? on long moves, also sometimes reports wrong hitEdge!
-
 			var moverPathRect = MakePathRect(a);
 
 			aInfo = .();
@@ -446,10 +525,6 @@ namespace Dimtoo
 	
 						let cellMin = Point2.Max(moverPathRect.Position / bGri.cellSize, bounds.Position);
 						let cellMax = Point2.Min((moverPathRect.Position + moverPathRect.Size) / bGri.cellSize, (bounds.Position + bounds.Size)) + .One;
-	
-						// TODO:
-						// we also still get stuck on the edges of two colliders when we slide along, even though we just slide further
-						// -> maybe due to reporting only one or no ?? edge in that case and thus we try to slide into the wall!
 
 						for (let aColl in a.coll)
 							if (aColl.layer.Overlaps(bGri.layer))
@@ -601,7 +676,9 @@ namespace Dimtoo
 				{
 					overlapPercent.Y = (a.Bottom - b.Top) / -(float)movement.Y;
 					hitPercent = Math.Max(overlapPercent.Y, hitPercent);
-					hitEdge = Edge.Bottom;
+					if (overlapPercent.X == overlapPercent.Y)
+						hitEdge |= Edge.Bottom;
+					else hitEdge = Edge.Bottom;
 				}
 			}
 			// a moves up
@@ -614,7 +691,9 @@ namespace Dimtoo
 				{
 					overlapPercent.Y = (a.Top - b.Bottom) / -(float)movement.Y;
 					hitPercent = Math.Max(overlapPercent.Y, hitPercent);
-					hitEdge = Edge.Top;
+					if (overlapPercent.X == overlapPercent.Y)
+						hitEdge |= Edge.Top;
+					else hitEdge = Edge.Top;
 				}
 			}
 			// a doesn't move on y
