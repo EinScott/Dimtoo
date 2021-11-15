@@ -2,20 +2,12 @@ using System;
 using System.Diagnostics;
 using Pile;
 
-// TODO:
-// separate ColliderRect and Grid!
-// grid needs to be its own this for us to have it here
-// the grid should not be bound to collision! we need it for rendering
-// -> so we may need different system just for keeping a list of (GridBody, Grid)
-//    GridBody has LayerMask, but does not provide a chance to move!
-// -> pass that system into Resolve!
-
 // TODO: also tileset importer
 
 namespace Dimtoo
 {
 	[Serializable]
-	struct Grid
+	struct GridCollider
 	{
 		public LayerMask layer;
 
@@ -89,13 +81,14 @@ namespace Dimtoo
 
 	class GridSystem : ComponentSystem, IRendererSystem
 	{
-		static Type[?] wantsComponents = .(typeof(Transform), typeof(Grid));
+		static Type[?] wantsComponents = .(typeof(Transform), typeof(GridCollider));
 		this
 		{
 			signatureTypes = wantsComponents;
 		}
 
 		public bool debugRenderGrid;
+		public Camera2D renderClip;
 
 		public int GetRenderLayer()
 		{
@@ -107,34 +100,38 @@ namespace Dimtoo
 			if (!debugRenderGrid)
 				return;
 
+			Debug.Assert(renderClip != null);
+
 			for (let e in entities)
 			{
 				let tra = componentManager.GetComponent<Transform>(e);
-				let gri = componentManager.GetComponent<Grid>(e);
+				let gri = componentManager.GetComponent<GridCollider>(e);
 				
 				let pos = tra.position.Round();
-				batch.HollowRect(gri.GetBounds(pos), 1, .Gray);
+				let bounds = gri.GetBounds(pos);
+				batch.HollowRect(bounds, 1, .Gray);
 
-				// TODO: optimize, this renders way too much
-				let bounds = gri.GetCellBounds();
-				for (var y = bounds.Y; y < bounds.Y + bounds.Height; y++)
-					for (var x = bounds.X; x < bounds.X + bounds.Width; x++)
+				let cellMin = Point2.Max(renderClip.CameraRect.Position / gri.cellSize, bounds.Position);
+				let cellMax = Point2.Min((renderClip.CameraRect.Position + renderClip.CameraRect.Size) / gri.cellSize, (bounds.Position + bounds.Size)) + .One;
+
+				for (var y = cellMin.Y; y < cellMax.Y; y++)
+					for (var x = cellMin.X; x < cellMax.X; x++)
 						if (gri.cells[y][x])
 							batch.HollowRect(gri.GetCollider(x, y, pos), 1, .Red);
 			}
 		}
 
 		[Optimize]
-		public static Rect MakeGridCellBoundsRect(Grid* grid)
+		public static Rect MakeGridCellBoundsRect(GridCollider* grid)
 		{
 			// In cell units!
 			var origin = Point2.Zero;
 			var size = Point2.Zero;
 
 			// Get grid tile bounds
-			Point2 min = .(Grid.MAX_CELL_AXIS), max = default;
-			for (let y < Grid.MAX_CELL_AXIS)
-				for (let x < Grid.MAX_CELL_AXIS)
+			Point2 min = .(GridCollider.MAX_CELL_AXIS), max = default;
+			for (let y < GridCollider.MAX_CELL_AXIS)
+				for (let x < GridCollider.MAX_CELL_AXIS)
 					if (grid.cells[y][x])
 					{
 						if (x < min.X) min.X = x;
@@ -153,15 +150,20 @@ namespace Dimtoo
 		}
 	}
 
-	[Serializable]
+	//[Serializable]
 	struct TileRenderer
 	{
-		
+		public Tileset tileset;
+
+		public this(Asset<Tileset> tileset)
+		{
+			this.tileset = tileset;
+		}	
 	}
 
 	class TileRenderSystem : ComponentSystem, IRendererSystem
 	{
-		static Type[?] wantsComponents = .(typeof(TileRenderer), typeof(Grid), typeof(Transform));
+		static Type[?] wantsComponents = .(typeof(TileRenderer), typeof(GridCollider), typeof(Transform));
 		this
 		{
 			signatureTypes = wantsComponents;
@@ -172,16 +174,69 @@ namespace Dimtoo
 			return -10;
 		}
 
+		public Camera2D renderClip;
+
 		public void Render(Batch2D batch)
 		{
-			/*for (let e in entities)
+			for (let e in entities)
 			{
-				let gridRend = componentManager.GetComponent<GridRenderer>(e);
 				let tra = componentManager.GetComponent<Transform>(e);
-				let gri = componentManager.GetComponent<Grid>(e);
+				let gri = componentManager.GetComponent<GridCollider>(e);
+				let tir = componentManager.GetComponent<TileRenderer>(e);
 
-				
-			}*/
+				if (tir.tileset == null)
+					continue;
+
+				let pos = tra.position.Round();
+				let bounds = gri.GetBounds(pos);
+
+				let cellMin = Point2.Max(renderClip.CameraRect.Position / gri.cellSize, bounds.Position);
+				let cellMax = Point2.Min((renderClip.CameraRect.Position + renderClip.CameraRect.Size) / gri.cellSize, (bounds.Position + bounds.Size)) + .One;
+
+				// TODO: animations, variants
+
+				let originPos = pos + gri.offset - (gri.cellSize / 2);
+				for (var y = cellMin.Y; y < cellMax.Y + 1; y++)
+					for (var x = cellMin.X; x < cellMax.X + 1; x++)
+					{
+						TileCorner corner = .None;
+						if (x - 1 >= 0 && y - 1 >= 0 && gri.cells[y - 1][x - 1])
+							corner |= .TopLeft;
+						if (x < cellMax.X && y - 1 >= 0 && gri.cells[y - 1][x])
+							corner |= .TopRight;
+						if (x - 1 >= 0 && y < cellMax.Y && gri.cells[y][x - 1])
+							corner |= .BottomLeft;
+						if (x < cellMax.X && y < cellMax.Y && gri.cells[y][x])
+							corner |= .BottomRight;
+
+						// TODO sample some noise and then modulo with variant count to get that?
+						
+						let tilePos = originPos + .(x, y) * gri.cellSize;
+						if (tir.tileset.HasTile(corner, let variationCount))
+						{
+							tir.tileset.Draw(batch, 0, 0, corner, tilePos);
+						}
+						else
+						{
+							// Assemble from separate tiles?
+
+							if ((corner & .TopLeft) != 0 && (corner & .BottomRight) != 0
+								&& tir.tileset.HasTile(.TopLeft, let tlVariationCount) && tir.tileset.HasTile(.BottomRight, let brVariationCount))
+							{
+								tir.tileset.Draw(batch, 0, 0, .TopLeft, tilePos);
+								tir.tileset.Draw(batch, 0, 0, .BottomRight, tilePos);
+							}
+							else if ((corner & .TopRight) != 0 && (corner & .BottomLeft) != 0
+								&& tir.tileset.HasTile(.TopRight, let trVariationCount) && tir.tileset.HasTile(.BottomLeft, let blVariationCount))
+							{
+								tir.tileset.Draw(batch, 0, 0, .TopRight, tilePos);
+								tir.tileset.Draw(batch, 0, 0, .BottomLeft, tilePos);
+							}
+
+							// ELSE leave blank!
+						}
+					}
+			}
 		}
 	}
 }

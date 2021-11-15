@@ -63,6 +63,8 @@ namespace Dimtoo
 		}
 	}
 
+	// TODO: support spacing
+
 	[Atma.SerializableAttribute]
 	class TilesetData
 	{
@@ -153,7 +155,7 @@ namespace Dimtoo
 			if (JsonConvert.Deserialize(tileData, json) case .Err)
 				LogErrorReturn!("AsepriteTileImporter: Error deserializing tile data from json file structure");
 
-			ArrayStream s = scope .(data.Length + tileData.tileCorners.Count + sizeof(uint32));
+			ArrayStream s = scope .(data.Length + tileData.tileCorners.Count * sizeof(uint32));
 			{
 				Serializer sr = scope .(s);
 
@@ -167,14 +169,14 @@ namespace Dimtoo
 					TileCorner corner = .None;
 
 					if (entry.upLeft)
-						corner |= .UpLeft;
+						corner |= .TopLeft;
 					if (entry.upRight)
-						corner |= .UpRight;
+						corner |= .TopRight;
 
 					if (entry.downLeft)
-						corner |= .DownLeft;
+						corner |= .BottomLeft;
 					if (entry.downRight)
-						corner |= .DownRight;
+						corner |= .BottomRight;
 
 					sr.Write(corner.Underlying);
 				}

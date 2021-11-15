@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using Pile;
 using Atma;
 
@@ -8,6 +9,13 @@ namespace Dimtoo
 	{
 		public int frame;
 		public Asset<Sprite> sprite;
+
+		public this(Asset<Sprite> sprite, int frame = 0)
+		{
+			Debug.Assert(frame >= 0);
+			this.sprite = sprite;
+			this.frame = frame;
+		}
 	}
 
 	class SpriteRendererSystem : ComponentSystem, IRendererSystem

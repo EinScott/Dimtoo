@@ -134,7 +134,7 @@ namespace Dimtoo
 		public Vector2 myDir, otherDir;
 		public Edge myHitEdge;
 		public int myColliderIndex, otherColliderIndex;
-		public ColliderType otherColliderType; // TODO
+		public ColliderType otherColliderType;
 
 		[Inline]
 		public bool Occured() => myDir != .Zero || otherDir != .Zero; // To collide, someone has to move.
@@ -512,7 +512,7 @@ namespace Dimtoo
 					if (eMove == eOther)
 						continue; // b is not a!
 	
-					let bGri = componentManager.GetComponent<Grid>(eOther);
+					let bGri = componentManager.GetComponent<GridCollider>(eOther);
 					let bTra = componentManager.GetComponent<Transform>(eOther);
 					
 					let bPos = bTra.position.Round();
@@ -563,7 +563,7 @@ namespace Dimtoo
 	
 														other = eOther,
 														otherWasMoving = false,
-														otherColliderIndex = Grid.GetGridIndex(x, y),
+														otherColliderIndex = GridCollider.GetGridIndex(x, y),
 														otherDir = .Zero,
 														otherColliderType = .Grid
 													};
@@ -575,7 +575,7 @@ namespace Dimtoo
 														{
 															iWasMoving = false,
 															myHitEdge = newHitEdge.Inverse,
-															myColliderIndex = Grid.GetGridIndex(x, y),
+															myColliderIndex = GridCollider.GetGridIndex(x, y),
 															myDir = .Zero,
 	
 															other = eMove,

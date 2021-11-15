@@ -9,16 +9,16 @@ namespace Dimtoo
 	{
 		None,
 
-		UpLeft = 1,
-		UpRight = 1 << 1,
-		DownLeft = 1 << 2,
-		DownRight = 1 << 3,
+		TopLeft = 1,
+		TopRight = 1 << 1,
+		BottomLeft = 1 << 2,
+		BottomRight = 1 << 3,
 
-		LeftSide = UpLeft | DownLeft,
-		RightSide = UpRight | DownRight,
+		LeftSide = TopLeft | BottomLeft,
+		RightSide = TopRight | BottomRight,
 
-		DownSide = DownLeft | DownRight,
-		UpSide = UpLeft | UpRight,
+		DownSide = BottomLeft | BottomRight,
+		UpSide = TopLeft | TopRight,
 
 		All = LeftSide | RightSide
 	}
@@ -27,50 +27,45 @@ namespace Dimtoo
 	{
 		public struct Tile
 		{
-			public readonly UPoint2 Offset;
 			public readonly Rect Clip;
 
-			public this(UPoint2 offset, Rect clip)
+			public this(Rect clip)
 			{
-				Offset = offset;
 				Clip = clip;
 			}
 		}
 
-		public readonly uint Spacing;
 		public readonly UPoint2 TileSize;
 
 		Frame[] frames ~ delete _;
-		Dictionary<String, Animation> animations ~ delete _;
+		Dictionary<String, Animation> animations = new .() ~ delete _;
 
-		// For a given tile configuration, get the number of variations and frames
+		// For a given tile configuration, get the number of variations
 		Dictionary<TileCorner, uint8> variations = new .() ~ delete _;
 
 		// The key here is connection + (variation << 8)
 		Dictionary<uint16, Tile> tiles = new .() ~ delete _;
 
-		public this(Span<Frame> frameSpan, Span<(TileCorner corner, UPoint2 tileOffset)> tileSpan, Span<(String name, Animation anim)> animSpan, UPoint2 tileSize, uint spacing = 0)
+		public this(Span<Frame> frameSpan, Span<(TileCorner corner, UPoint2 tileOffset)> tileSpan, Span<(String name, Animation anim)> animSpan, UPoint2 tileSize)
 		{
 			Debug.Assert(frameSpan.Length > 0, "Sprite has to have at least one frame");
 
 			frames = new Frame[frameSpan.Length];
 			if (frameSpan.Length > 0) frameSpan.CopyTo(frames);
 
-			Spacing = spacing;
 			TileSize = tileSize;
 
 			for (let tup in tileSpan)
 			{
 				// Update variation count
-				uint8 variation = 1;
+				uint8 variation = 0;
 				if (variations.TryGetValue(tup.corner, let val))
 					variation = variations[tup.corner] = val + 1;
 				else variations.Add(tup.corner, 1);
 
 				// Put combination in tiles lookup
 				tiles.Add(((uint16)tup.corner + ((uint16)variation << 8)),
-					Tile(tup.tileOffset,
-					Rect(tup.tileOffset * TileSize + (tup.tileOffset + .One) * Spacing, TileSize)));
+					Tile(Rect(tup.tileOffset, TileSize)));
 			}
 
 			for (let tup in animSpan)
@@ -79,6 +74,9 @@ namespace Dimtoo
 
 		[Inline]
 		public bool HasAnimation(String name) => animations.ContainsKey(name);
+
+		[Inline]
+		public bool HasTile(TileCorner corner, out uint8 variatioCount) => variations.TryGetValue(corner, out variatioCount);
 
 		public Animation GetAnimation(String name)
 		{
@@ -91,8 +89,13 @@ namespace Dimtoo
 		[Inline]
 		public void Draw(Batch2D batch, int frame, int variation, TileCorner corner, Vector2 position, Vector2 scale = .One, float rotation = 0, Color color = .White)
 		{
-			let tile = tiles[(uint16)corner + ((uint16)variations[corner] << 8)];
-			batch.Image(frames[frame].Texture, tile.Clip, position, scale, -(TileSize / 2) , rotation, color);
+			{
+				Debug.Assert(variations.TryGetValue(corner, let variationCount));
+				Debug.Assert(variationCount > variation);
+			}
+
+			let tile = tiles[(uint16)corner + ((uint16)variation << 8)];
+			batch.Image(frames[frame].Texture, tile.Clip, position, scale, .Zero, rotation, color);
 		}
 	}
 }
