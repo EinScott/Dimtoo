@@ -1,8 +1,7 @@
 using System;
 using System.Diagnostics;
 using Pile;
-
-// TODO: also tileset importer
+using FastNoiseLite;
 
 namespace Dimtoo
 {
@@ -153,7 +152,7 @@ namespace Dimtoo
 	//[Serializable]
 	struct TileRenderer
 	{
-		public Tileset tileset;
+		public Asset<Tileset> tileset;
 
 		public this(Asset<Tileset> tileset)
 		{
@@ -173,6 +172,14 @@ namespace Dimtoo
 		{
 			return -10;
 		}
+
+		FastNoiseLite noise =
+			{
+				let n = new FastNoiseLite();
+				n.SetFrequency(1);
+
+				n
+			} ~ delete _;
 
 		public Camera2D renderClip;
 
@@ -202,38 +209,43 @@ namespace Dimtoo
 						TileCorner corner = .None;
 						if (x - 1 >= 0 && y - 1 >= 0 && gri.cells[y - 1][x - 1])
 							corner |= .TopLeft;
-						if (x < cellMax.X && y - 1 >= 0 && gri.cells[y - 1][x])
+						if (x < GridCollider.MAX_CELL_AXIS && y - 1 >= 0 && gri.cells[y - 1][x])
 							corner |= .TopRight;
-						if (x - 1 >= 0 && y < cellMax.Y && gri.cells[y][x - 1])
+						if (x - 1 >= 0 && y < GridCollider.MAX_CELL_AXIS && gri.cells[y][x - 1])
 							corner |= .BottomLeft;
-						if (x < cellMax.X && y < cellMax.Y && gri.cells[y][x])
+						if (x < GridCollider.MAX_CELL_AXIS && y < GridCollider.MAX_CELL_AXIS && gri.cells[y][x])
 							corner |= .BottomRight;
 
-						// TODO sample some noise and then modulo with variant count to get that?
-						
-						let tilePos = originPos + .(x, y) * gri.cellSize;
-						if (tir.tileset.HasTile(corner, let variationCount))
+						mixin GetVariation(int variationCount)
 						{
-							tir.tileset.Draw(batch, 0, 0, corner, tilePos);
+							(int)(((noise.GetNoise(x, y) + 1) / 2) * (variationCount - 0.001f))
 						}
+
+						let tilePos = originPos + .(x, y) * gri.cellSize;
+						let tileset = tir.tileset.Asset;
+						if (tileset.HasTile(corner, let variationCount))
+							tileset.Draw(batch, 0, GetVariation!(variationCount), corner, tilePos);
 						else
 						{
 							// Assemble from separate tiles?
 
 							if ((corner & .TopLeft) != 0 && (corner & .BottomRight) != 0
-								&& tir.tileset.HasTile(.TopLeft, let tlVariationCount) && tir.tileset.HasTile(.BottomRight, let brVariationCount))
+								&& tileset.HasTile(.TopLeft, let tlVariationCount) && tileset.HasTile(.BottomRight, let brVariationCount))
 							{
-								tir.tileset.Draw(batch, 0, 0, .TopLeft, tilePos);
-								tir.tileset.Draw(batch, 0, 0, .BottomRight, tilePos);
+								tileset.Draw(batch, 0, GetVariation!(tlVariationCount), .TopLeft, tilePos);
+								tileset.Draw(batch, 0, GetVariation!(brVariationCount), .BottomRight, tilePos);
 							}
 							else if ((corner & .TopRight) != 0 && (corner & .BottomLeft) != 0
-								&& tir.tileset.HasTile(.TopRight, let trVariationCount) && tir.tileset.HasTile(.BottomLeft, let blVariationCount))
+								&& tileset.HasTile(.TopRight, let trVariationCount) && tileset.HasTile(.BottomLeft, let blVariationCount))
 							{
-								tir.tileset.Draw(batch, 0, 0, .TopRight, tilePos);
-								tir.tileset.Draw(batch, 0, 0, .BottomLeft, tilePos);
+								tileset.Draw(batch, 0, GetVariation!(trVariationCount), .TopRight, tilePos);
+								tileset.Draw(batch, 0, GetVariation!(blVariationCount), .BottomLeft, tilePos);
 							}
-
-							// ELSE leave blank!
+							else
+							{
+								// Nothing found
+								batch.Rect(.(tilePos, tileset.TileSize), .Magenta);
+							}
 						}
 					}
 			}

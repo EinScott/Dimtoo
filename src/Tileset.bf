@@ -60,7 +60,10 @@ namespace Dimtoo
 				// Update variation count
 				uint8 variation = 0;
 				if (variations.TryGetValue(tup.corner, let val))
-					variation = variations[tup.corner] = val + 1;
+				{
+					variations[tup.corner] = val + 1;
+					variation = val;
+				}
 				else variations.Add(tup.corner, 1);
 
 				// Put combination in tiles lookup
@@ -76,7 +79,7 @@ namespace Dimtoo
 		public bool HasAnimation(String name) => animations.ContainsKey(name);
 
 		[Inline]
-		public bool HasTile(TileCorner corner, out uint8 variatioCount) => variations.TryGetValue(corner, out variatioCount);
+		public bool HasTile(TileCorner corner, out uint8 variationCount) => variations.TryGetValue(corner, out variationCount);
 
 		public Animation GetAnimation(String name)
 		{

@@ -10,6 +10,9 @@ namespace Dimtoo
 	// TODO: do deserialize / create entity from string
 	// do full scene serialize / deserialize
 
+	// NOSERIALIZE attribute?
+	// CUSTOMSERIALIZE attribute? -> call some function to fill in the type fully after the base deserialize! -> for things that need assets?
+
 	[AttributeUsage(.Struct|.Enum, .AlwaysIncludeTarget | .ReflectAttribute, ReflectUser = .AllMembers, AlwaysIncludeUser = .IncludeAllMethods | .AssumeInstantiated)]
 	struct SerializableAttribute : Attribute
 	{
@@ -163,6 +166,8 @@ namespace Dimtoo
 				return Serialize(fieldType, val, buffer);
 			}
 		}
+
+		// FAKE PILE TYPES WITH REFLECTION INFO
 
 		[Serializable]
 		struct Rect
