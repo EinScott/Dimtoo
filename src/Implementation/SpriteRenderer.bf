@@ -5,7 +5,7 @@ using Atma;
 
 namespace Dimtoo
 {
-	struct SpriteRenderer
+	struct SpriteRendererComponent
 	{
 		public int frame;
 		public Asset<Sprite> sprite;
@@ -20,7 +20,7 @@ namespace Dimtoo
 
 	class SpriteRendererSystem : ComponentSystem, IRendererSystem
 	{
-		static Type[?] wantsComponents = .(typeof(SpriteRenderer), typeof(Transform));
+		static Type[?] wantsComponents = .(typeof(SpriteRendererComponent), typeof(TransformComponent));
 		this
 		{
 			signatureTypes = wantsComponents;
@@ -37,8 +37,8 @@ namespace Dimtoo
 
 			for (let e in entities)
 			{
-				let spr = componentManager.GetComponent<SpriteRenderer>(e);
-				let tra = componentManager.GetComponent<Transform>(e);
+				let spr = componentManager.GetComponent<SpriteRendererComponent>(e);
+				let tra = componentManager.GetComponent<TransformComponent>(e);
 
 				spr.sprite.Asset.Draw(batch, spr.frame, tra.position.Round(), tra.scale, tra.rotation);
 			}

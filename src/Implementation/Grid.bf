@@ -6,14 +6,14 @@ using FastNoiseLite;
 namespace Dimtoo
 {
 	[Serializable]
-	struct GridCollider
+	struct GridColliderComponent
 	{
 		public LayerMask layer;
 
 		public Point2 offset;
 		public UPoint2 cellSize;
 		public bool[MAX_CELL_AXIS][MAX_CELL_AXIS] cells;
-		public const int MAX_CELL_AXIS = 128;
+		public const int MAX_CELL_AXIS = 512;
 
 		bool gridDirty;
 		Rect cellBounds;
@@ -80,7 +80,7 @@ namespace Dimtoo
 
 	class GridSystem : ComponentSystem, IRendererSystem
 	{
-		static Type[?] wantsComponents = .(typeof(Transform), typeof(GridCollider));
+		static Type[?] wantsComponents = .(typeof(TransformComponent), typeof(GridColliderComponent));
 		this
 		{
 			signatureTypes = wantsComponents;
@@ -103,15 +103,15 @@ namespace Dimtoo
 
 			for (let e in entities)
 			{
-				let tra = componentManager.GetComponent<Transform>(e);
-				let gri = componentManager.GetComponent<GridCollider>(e);
+				let tra = componentManager.GetComponent<TransformComponent>(e);
+				let gri = componentManager.GetComponent<GridColliderComponent>(e);
 				
 				let pos = tra.position.Round();
 				let bounds = gri.GetBounds(pos);
 				batch.HollowRect(bounds, 1, .Gray);
 
 				let cellMin = Point2.Max(renderClip.CameraRect.Position / gri.cellSize, bounds.Position);
-				let cellMax = Point2.Min((renderClip.CameraRect.Position + renderClip.CameraRect.Size) / gri.cellSize, (bounds.Position + bounds.Size)) + .One;
+				let cellMax = Point2.Min((renderClip.CameraRect.Position + renderClip.CameraRect.Size) / gri.cellSize, (bounds.Position + bounds.Size));
 
 				for (var y = cellMin.Y; y < cellMax.Y; y++)
 					for (var x = cellMin.X; x < cellMax.X; x++)
@@ -121,16 +121,16 @@ namespace Dimtoo
 		}
 
 		[Optimize]
-		public static Rect MakeGridCellBoundsRect(GridCollider* grid)
+		public static Rect MakeGridCellBoundsRect(GridColliderComponent* grid)
 		{
 			// In cell units!
 			var origin = Point2.Zero;
 			var size = Point2.Zero;
 
 			// Get grid tile bounds
-			Point2 min = .(GridCollider.MAX_CELL_AXIS), max = default;
-			for (let y < GridCollider.MAX_CELL_AXIS)
-				for (let x < GridCollider.MAX_CELL_AXIS)
+			Point2 min = .(GridColliderComponent.MAX_CELL_AXIS), max = default;
+			for (let y < GridColliderComponent.MAX_CELL_AXIS)
+				for (let x < GridColliderComponent.MAX_CELL_AXIS)
 					if (grid.cells[y][x])
 					{
 						if (x < min.X) min.X = x;
@@ -150,7 +150,7 @@ namespace Dimtoo
 	}
 
 	//[Serializable]
-	struct TileRenderer
+	struct TileRendererComponent
 	{
 		public Asset<Tileset> tileset;
 
@@ -162,7 +162,7 @@ namespace Dimtoo
 
 	class TileRenderSystem : ComponentSystem, IRendererSystem
 	{
-		static Type[?] wantsComponents = .(typeof(TileRenderer), typeof(GridCollider), typeof(Transform));
+		static Type[?] wantsComponents = .(typeof(TileRendererComponent), typeof(GridColliderComponent), typeof(TransformComponent));
 		this
 		{
 			signatureTypes = wantsComponents;
@@ -187,9 +187,9 @@ namespace Dimtoo
 		{
 			for (let e in entities)
 			{
-				let tra = componentManager.GetComponent<Transform>(e);
-				let gri = componentManager.GetComponent<GridCollider>(e);
-				let tir = componentManager.GetComponent<TileRenderer>(e);
+				let tra = componentManager.GetComponent<TransformComponent>(e);
+				let gri = componentManager.GetComponent<GridColliderComponent>(e);
+				let tir = componentManager.GetComponent<TileRendererComponent>(e);
 
 				if (tir.tileset == null)
 					continue;
@@ -198,7 +198,7 @@ namespace Dimtoo
 				let bounds = gri.GetBounds(pos);
 
 				let cellMin = Point2.Max(renderClip.CameraRect.Position / gri.cellSize, bounds.Position);
-				let cellMax = Point2.Min((renderClip.CameraRect.Position + renderClip.CameraRect.Size) / gri.cellSize, (bounds.Position + bounds.Size)) + .One;
+				let cellMax = Point2.Min((renderClip.CameraRect.Position + renderClip.CameraRect.Size) / gri.cellSize, (bounds.Position + bounds.Size));
 
 				// TODO: animations, variants
 
@@ -209,11 +209,11 @@ namespace Dimtoo
 						TileCorner corner = .None;
 						if (x - 1 >= 0 && y - 1 >= 0 && gri.cells[y - 1][x - 1])
 							corner |= .TopLeft;
-						if (x < GridCollider.MAX_CELL_AXIS && y - 1 >= 0 && gri.cells[y - 1][x])
+						if (x < GridColliderComponent.MAX_CELL_AXIS && y - 1 >= 0 && gri.cells[y - 1][x])
 							corner |= .TopRight;
-						if (x - 1 >= 0 && y < GridCollider.MAX_CELL_AXIS && gri.cells[y][x - 1])
+						if (x - 1 >= 0 && y < GridColliderComponent.MAX_CELL_AXIS && gri.cells[y][x - 1])
 							corner |= .BottomLeft;
-						if (x < GridCollider.MAX_CELL_AXIS && y < GridCollider.MAX_CELL_AXIS && gri.cells[y][x])
+						if (x < GridColliderComponent.MAX_CELL_AXIS && y < GridColliderComponent.MAX_CELL_AXIS && gri.cells[y][x])
 							corner |= .BottomRight;
 
 						mixin GetVariation(int variationCount)

@@ -20,6 +20,13 @@ namespace Dimtoo
 		};
 
 		[Inline]
+		public void ClearSystemEntities()
+		{
+			for (let system in systems.Values)
+				system.system.entities.Clear();
+		}
+
+		[Inline]
 		public T RegisterSystem<T>() where T : ComponentSystem
 		{
 			Debug.Assert(!systems.ContainsKey(typeof(T)), "System already registered");

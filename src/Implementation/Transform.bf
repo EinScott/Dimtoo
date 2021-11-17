@@ -2,7 +2,7 @@ using Pile;
 
 namespace Dimtoo
 {
-	struct Transform
+	struct TransformComponent
 	{
 		public Vector2 position;
 		public Vector2 scale;

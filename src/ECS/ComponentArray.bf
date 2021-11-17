@@ -6,6 +6,7 @@ namespace Dimtoo
 {
 	interface IComponentArrayBase
 	{
+		void ClearData();
 		void OnEntityDestroyed(Entity e);
 
 		bool GetSerializeData(Entity e, out void* data);
@@ -16,13 +17,21 @@ namespace Dimtoo
 		T[MAX_ENTITIES] components;
 		readonly Dictionary<Entity, int> entityToIndex = new .() ~ delete _;
 		readonly List<Entity> indexToEntity = new .() ~ delete _;
-		int size;
+		int count;
+
+		public void ClearData()
+		{
+			components = .();
+			entityToIndex.Clear();
+			indexToEntity.Clear();
+			count = 0;
+		}
 
 		public void InsertData(Entity e, T component)
 		{
 			Debug.Assert(!entityToIndex.ContainsKey(e), "Component added to the same entity more than once");
 
-			let newIndex = size++;
+			let newIndex = count++;
 			components[newIndex] = component;
 
 			// Add to lookups
@@ -37,7 +46,7 @@ namespace Dimtoo
 			Debug.Assert(entityToIndex.ContainsKey(e), "Component not present on this entity");
 
 			let indexOfRemovedEntity = entityToIndex[e];
-			let indexOfLastElement = --size;
+			let indexOfLastElement = --count;
 
 			// Replace removed with last element
 			components[indexOfRemovedEntity] = components[indexOfLastElement];

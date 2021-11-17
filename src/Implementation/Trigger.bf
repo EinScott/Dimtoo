@@ -5,7 +5,7 @@ using Pile;
 namespace Dimtoo
 {
 	[Serializable]
-	struct TriggerBody
+	struct TriggerBodyComponent
 	{
 		public SizedList<TriggerRect, const 16> triggers;
 
@@ -37,7 +37,7 @@ namespace Dimtoo
 	}
 
 	[Serializable]
-	struct TriggerOverlapFeedback
+	struct TriggerOverlapFeedbackComponent
 	{
 		public SizedList<TriggerCollisionInfo, const 16> overlaps;
 		public SizedList<TriggerCollisionInfo, const 8> newOverlaps;
@@ -52,7 +52,7 @@ namespace Dimtoo
 
 	class TriggerFeedbackSystem : ComponentSystem
 	{
-		static Type[?] wantsComponents = .(typeof(TriggerOverlapFeedback));
+		static Type[?] wantsComponents = .(typeof(TriggerOverlapFeedbackComponent));
 		this
 		{
 			signatureTypes = wantsComponents;
@@ -64,7 +64,7 @@ namespace Dimtoo
 
 			for (let e in entities)
 			{
-				let feed = componentManager.GetComponent<TriggerOverlapFeedback>(e);
+				let feed = componentManager.GetComponent<TriggerOverlapFeedbackComponent>(e);
 
 				// Reset overlaps
 				feed.overlaps.Clear();
@@ -75,7 +75,7 @@ namespace Dimtoo
 
 	class TriggerSystem : ComponentSystem, IRendererSystem
 	{
-		static Type[?] wantsComponents = .(typeof(Transform), typeof(TriggerBody));
+		static Type[?] wantsComponents = .(typeof(TransformComponent), typeof(TriggerBodyComponent));
 		this
 		{
 			signatureTypes = wantsComponents;
@@ -95,8 +95,8 @@ namespace Dimtoo
 
 			for (let e in entities)
 			{
-				let tra = componentManager.GetComponent<Transform>(e);
-				let trib = componentManager.GetComponent<TriggerBody>(e);
+				let tra = componentManager.GetComponent<TransformComponent>(e);
+				let trib = componentManager.GetComponent<TriggerBodyComponent>(e);
 
 				for (let t in trib.triggers)
 					batch.HollowRect(.(tra.position.Round() + t.rect.Position, t.rect.Size), 1, .Blue);
@@ -111,16 +111,16 @@ namespace Dimtoo
 
 			for (let e in entities)
 			{
-				let tra = componentManager.GetComponent<Transform>(e);
-				let trib = componentManager.GetComponent<TriggerBody>(e);
+				let tra = componentManager.GetComponent<TransformComponent>(e);
+				let trib = componentManager.GetComponent<TriggerBodyComponent>(e);
 
 				trib.prevOverlaps = trib.overlaps;
 				trib.overlaps.Clear();
 
 				for (let eC in collSys.entities)
 				{
-					let traC = componentManager.GetComponent<Transform>(eC);
-					let cob = componentManager.GetComponent<CollisionBody>(eC);
+					let traC = componentManager.GetComponent<TransformComponent>(eC);
+					let cob = componentManager.GetComponent<CollisionBodyComponent>(eC);
 
 					for (let trig in trib.triggers)
 					{
@@ -140,7 +140,7 @@ namespace Dimtoo
 											otherColliderIndex = @coll.Index
 										});
 
-									if (componentManager.GetComponentOptional<TriggerOverlapFeedback>(eC, let feedback))
+									if (componentManager.GetComponentOptional<TriggerOverlapFeedbackComponent>(eC, let feedback))
 									{
 										feedback.overlaps.Add(TriggerCollisionInfo()
 											{
@@ -170,7 +170,7 @@ namespace Dimtoo
 					{
 						trib.newOverlaps.Add(currOver);
 
-						if (componentManager.GetComponentOptional<TriggerOverlapFeedback>(currOver.other, let feedback))
+						if (componentManager.GetComponentOptional<TriggerOverlapFeedbackComponent>(currOver.other, let feedback))
 							// Technically we've already added this to the feedback.overlaps list somewhere, but we're not going to search, just make it again
 							feedback.newOverlaps.Add(TriggerCollisionInfo()
 								{

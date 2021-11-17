@@ -7,7 +7,7 @@ namespace Dimtoo
 	// TODO: also track just "contacts" of the four edges -> on ground, on wall...
 	// COUNTS ONLY CONTACTS WITH SOLID EDGES!! (or make this an option?)
 
-	struct ContactBody
+	struct ContactBodyComponent
 	{
 		public SizedList<ContactInfo, const 16> data;
 		public Edge mask; // Quick overview of which edges are in contact
@@ -22,7 +22,7 @@ namespace Dimtoo
 
 	class ContactSystem : ComponentSystem
 	{
-		static Type[?] wantsComponents = .(typeof(Transform), typeof(CollisionBody), typeof(ContactBody));
+		static Type[?] wantsComponents = .(typeof(TransformComponent), typeof(CollisionBodyComponent), typeof(ContactBodyComponent));
 		this
 		{
 			signatureTypes = wantsComponents;

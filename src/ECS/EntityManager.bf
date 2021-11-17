@@ -8,7 +8,7 @@ namespace Dimtoo
 	{
 		readonly List<Entity> availableEntities = new .(MAX_ENTITIES) ~ delete _;
 		Signature[MAX_ENTITIES] signatures;
-		uint16 livingEntityCount;
+		readonly HashSet<Entity> livingEntities = new .(MAX_ENTITIES) ~ delete _;
 
 		[Inline]
 		public this()
@@ -18,12 +18,24 @@ namespace Dimtoo
 		}
 
 		[Inline]
+		public void ClearEntities()
+		{
+			availableEntities.Clear();
+			for (var i = MAX_ENTITIES - 1; i >= 0; i--)
+				availableEntities.Add((uint16)i);
+
+			signatures = .();
+			livingEntities.Clear();
+		}
+
+		[Inline]
 		public Entity CreateEntity()
 		{
-			Runtime.Assert(livingEntityCount < MAX_ENTITIES, "Too many entities");
+			Runtime.Assert(livingEntities.Count < MAX_ENTITIES, "Too many entities");
 			
-			livingEntityCount++;
-			return availableEntities.PopBack();
+			let newEnt = availableEntities.PopBack();
+			livingEntities.Add(newEnt);
+			return newEnt;
 		}
 
 		[Inline]
@@ -31,7 +43,7 @@ namespace Dimtoo
 		{
 			Debug.Assert(e < MAX_ENTITIES, "Entity out of range");
 			
-			livingEntityCount--;
+			livingEntities.Remove(e);
 			availableEntities.Add(e);
 			signatures[e] = default;
 		}
@@ -53,6 +65,12 @@ namespace Dimtoo
 
 				signatures[e] = value;
 			}
+		}
+
+		[Inline]
+		public HashSet<Entity>.Enumerator EnumerateEntities()
+		{
+			return livingEntities.GetEnumerator();
 		}
 	}
 }

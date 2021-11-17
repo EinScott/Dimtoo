@@ -14,6 +14,13 @@ namespace Dimtoo
 		ComponentType nextType;
 
 		[Inline]
+		public void ClearData()
+		{
+			for (let tup in componentArrays.Values)
+				tup.array.ClearData();
+		}
+
+		[Inline]
 		public void RegisterComponent<T>() where T : struct
 		{
 			Debug.Assert(!componentArrays.ContainsKey(typeof(T)), "Component type already registered");

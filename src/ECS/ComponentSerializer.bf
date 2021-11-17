@@ -28,6 +28,25 @@ namespace Dimtoo
 			compMan = comp;
 		}
 
+		public void GetSerializeString(Scene scene, String buffer)
+		{
+			buffer.Append("[\n");
+
+			for (let entity in scene.[Friend]entMan.EnumerateEntities())
+			{
+				GetSerializeString(entity, buffer);
+				buffer.Append(",\n");
+			}
+
+			if (buffer.EndsWith(",\n"))
+			{
+				buffer.RemoveFromEnd(2);
+				buffer.Append('\n');
+			}
+
+			buffer.Append("]");
+		}
+
 		public void GetSerializeString(Entity e, String buffer)
 		{
 			buffer.Append("[\n");

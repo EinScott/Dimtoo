@@ -22,6 +22,13 @@ namespace Dimtoo
 
 		protected readonly ComponentSerializer serializer = new .(compMan) ~ delete _;
 
+		public void Clear()
+		{
+			entMan.ClearEntities();
+			sysMan.ClearSystemEntities();
+			compMan.ClearData();
+		}
+
 		[Inline]
 		public Entity CreateEntity() => entMan.CreateEntity();
 
