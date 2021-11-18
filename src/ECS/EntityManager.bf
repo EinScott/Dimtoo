@@ -38,6 +38,17 @@ namespace Dimtoo
 			return newEnt;
 		}
 
+		public Result<void> CreateSpecificEntity(Entity e)
+		{
+			Runtime.Assert(livingEntities.Count < MAX_ENTITIES, "Too many entities");
+			if (livingEntities.Contains(e))
+				return .Err;
+			
+			availableEntities.Remove(e);
+			livingEntities.Add(e);
+			return .Ok;
+		}
+
 		[Inline]
 		public void DestroyEntity(Entity e)
 		{

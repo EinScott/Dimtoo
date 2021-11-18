@@ -32,6 +32,9 @@ namespace Dimtoo
 		[Inline]
 		public Entity CreateEntity() => entMan.CreateEntity();
 
+		[Inline]
+		public Result<void> CreateSpecificEntitiy(Entity e) => entMan.CreateSpecificEntity(e);
+
 		public void DestroyEntity(Entity e)
 		{
 			entMan.DestroyEntity(e);
