@@ -111,7 +111,7 @@ namespace Dimtoo
 				batch.HollowRect(bounds, 1, .Gray);
 
 				let cellMin = Point2.Max(renderClip.CameraRect.Position / gri.cellSize, bounds.Position);
-				let cellMax = Point2.Min((renderClip.CameraRect.Position + renderClip.CameraRect.Size) / gri.cellSize, (bounds.Position + bounds.Size));
+				let cellMax = Point2.Min((renderClip.CameraRect.Position + renderClip.CameraRect.Size) / gri.cellSize + .One, (bounds.Position + bounds.Size));
 
 				for (var y = cellMin.Y; y < cellMax.Y; y++)
 					for (var x = cellMin.X; x < cellMax.X; x++)
@@ -198,7 +198,7 @@ namespace Dimtoo
 				let bounds = gri.GetBounds(pos);
 
 				let cellMin = Point2.Max(renderClip.CameraRect.Position / gri.cellSize, bounds.Position);
-				let cellMax = Point2.Min((renderClip.CameraRect.Position + renderClip.CameraRect.Size) / gri.cellSize, (bounds.Position + bounds.Size));
+				let cellMax = Point2.Min((renderClip.CameraRect.Position + renderClip.CameraRect.Size) / gri.cellSize + .One, (bounds.Position + bounds.Size));
 
 				// TODO: animations, variants
 

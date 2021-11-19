@@ -14,13 +14,27 @@ namespace Dimtoo
 	// CUSTOMSERIALIZE attribute? -> call some function to fill in the type fully after the base deserialize! -> for things that need assets?
 
 	[AttributeUsage(.Struct|.Enum, .AlwaysIncludeTarget | .ReflectAttribute, ReflectUser = .AllMembers, AlwaysIncludeUser = .IncludeAllMethods | .AssumeInstantiated)]
-	struct SerializableAttribute : Attribute
+	struct SerializableAttribute : Attribute, IComptimeTypeApply
 	{
-
+		[Comptime]
+		public void ApplyToType(Type type)
+		{
+			// @report when typing that string, there were lots of crashes
+			let name = type.GetName(.. scope .());
+			Compiler.EmitTypeBody(type, scope $"""
+				static this
+				{{
+					if (!ComponentSerializer.componentTypes.ContainsKey("{name}"))
+						ComponentSerializer.componentTypes.Add("{name}", typeof(Self));
+				}}
+				""");
+		}
 	}
 
 	class ComponentSerializer
 	{
+		public static Dictionary<String, Type> componentTypes = new .() ~ delete _;
+
 		ComponentManager compMan;
 
 		public this(ComponentManager comp)
@@ -74,8 +88,11 @@ namespace Dimtoo
 			buffer.Append("\n]");
 		}
 
-		bool SerializeStruct(Type structType, Variant component, String buffer, bool includeDefault)
+		bool SerializeStruct(Type structType, Variant structVal, String buffer, bool includeDefault)
 		{
+			var structVal;
+			Debug.Assert(structType.IsStruct);
+
 			if (!structType.HasCustomAttribute<SerializableAttribute>())
 			{
 				//Log.Debug(scope $"Struct {structType} is not marked as [Serializable] and will not be included");
@@ -87,17 +104,10 @@ namespace Dimtoo
 
 			for (let m in structType.GetFields(.Public|.Instance))
 			{
-				if (m.FieldType.IsEnum && m.FieldType.IsUnion)
+				if ((m.FieldType.IsEnum && m.FieldType.IsUnion) || m.FieldType.IsPointer || m.FieldType.IsObject && !m.FieldType is SizedArrayType)
 					continue;
 
-				Variant val;
-				if (m.GetValue(component) case .Ok(let value))
-					val = value;
-				else
-				{
-					Log.Debug($"Failed to get value of field {m.Name}, which is a {m.FieldType.GetName(.. scope .())}");
-					continue;
-				}
+				Variant val = Variant.CreateReference(m.FieldType, ((uint8*)structVal.DataPtr) + m.MemberOffset);
 
 				if (VariantDataIsZero!(val))
 					continue;
@@ -106,9 +116,7 @@ namespace Dimtoo
 				buffer.Append(m.Name);
 				buffer.Append("=");
 
-				let mention = SerializeValue(m.FieldType, ref val, buffer, includeDefault);
-
-				val.Dispose();
+				let mention = SerializeValue(ref val, buffer, includeDefault);
 
 				if (!mention)
 				{
@@ -134,8 +142,10 @@ namespace Dimtoo
 			return true;
 		}
 
-		bool SerializeValue(Type fieldType, ref Variant val, String buffer, bool includeDefault)
+		bool SerializeValue(ref Variant val, String buffer, bool includeDefault)
 		{
+			Type fieldType = val.VariantType;
+
 			if (fieldType.IsPointer || fieldType.IsObject && !fieldType is SizedArrayType)
 				return false; // Don't serialize objects or pointers
 			else if (fieldType.IsInteger)
@@ -183,7 +193,7 @@ namespace Dimtoo
 				{
 					var arrVal = Variant.CreateReference(arrType, ptr);
 
-					if (SerializeValue(arrType, ref arrVal, buffer, includeDefault))
+					if (SerializeValue(ref arrVal, buffer, includeDefault))
 					{
 						if (!arrType.IsPrimitive)
 							buffer.Append(",\n");
@@ -230,16 +240,16 @@ namespace Dimtoo
 				switch (fieldType)
 				{
 				case typeof(Pile.Rect):
-					val.[Friend]mStructType = ((int)Internal.UnsafeCastToPtr(typeof(Rect)) & ~1) + (val.[Friend]mStructType & 1);
+					val.[Friend]mStructType = ((int)Internal.UnsafeCastToPtr(typeof(Rect)) & ~3) + (val.[Friend]mStructType & 3);
 					structType = typeof(Rect);
 				case typeof(Pile.Vector2):
-					val.[Friend]mStructType = ((int)Internal.UnsafeCastToPtr(typeof(Vector2)) & ~1) + (val.[Friend]mStructType & 1);
+					val.[Friend]mStructType = ((int)Internal.UnsafeCastToPtr(typeof(Vector2)) & ~3) + (val.[Friend]mStructType & 3);
 					structType = typeof(Vector2);
 				case typeof(Pile.Point2):
-					val.[Friend]mStructType = ((int)Internal.UnsafeCastToPtr(typeof(Point2)) & ~1) + + (val.[Friend]mStructType & 1);
+					val.[Friend]mStructType = ((int)Internal.UnsafeCastToPtr(typeof(Point2)) & ~3) + + (val.[Friend]mStructType & 3);
 					structType = typeof(Point2);
 				case typeof(Pile.UPoint2):
-					val.[Friend]mStructType = ((int)Internal.UnsafeCastToPtr(typeof(UPoint2)) & ~1) + + (val.[Friend]mStructType & 1);
+					val.[Friend]mStructType = ((int)Internal.UnsafeCastToPtr(typeof(UPoint2)) & ~3) + + (val.[Friend]mStructType & 3);
 					structType = typeof(UPoint2);
 				}
 
@@ -338,12 +348,23 @@ namespace Dimtoo
 			ForceEat!('[', ref buffer);
 
 			while ({
-				ForceEat!('[', ref buffer);
+				EatSpace!(ref buffer);
 				buffer[0] != ']'
 				})
 			{
-				if (DeserializeStruct(scene, e, ref buffer) case .Err)
-					return .Err; // Component deserialize failure
+				// Get type from name
+				if (DeserializeStructType(let structType, ref buffer) case .Err)
+					return .Err; // Type error
+
+				// TODO
+				// also need way to access component/scene stuff through Type + Span or something?
+				// scene.AddComponent(e, component.VariantType, .(component.DataPtr, component.VariantType.Size));
+				// This function should probably do lots of internal asserts!
+				var structMemory = Span<uint8>();
+
+				// Fill in type from body
+				if (DeserializeStructBody(structType, structMemory, ref buffer) case .Err)
+					return .Err; // Deserialize error
 
 				EatSpace!(ref buffer);
 
@@ -356,20 +377,164 @@ namespace Dimtoo
 			return .Ok;
 		}
 
-		Result<void> DeserializeStruct(Scene scene, Entity e, ref StringView buffer)
+		Result<void> DeserializeStructType(out Type structType, ref StringView buffer)
 		{
 			EatSpace!(ref buffer);
 
-			var nameLen = 0;
-			for (; nameLen < buffer.Length; nameLen++)
-				if (!buffer[nameLen].IsLetterOrDigit)
-					break;
+			{
+				var nameLen = 0;
+				for (; nameLen < buffer.Length; nameLen++)
+					if (!buffer[nameLen].IsLetterOrDigit)
+						break;
 
-			let name = buffer.Slice(0, nameLen);
-			buffer.RemoveFromStart(nameLen);
+				let name = buffer.Substring(0, nameLen);
+				buffer.RemoveFromStart(nameLen);
 
-			// TODO: either build name list or similar way to get the type? -> Serializable emits a static constructor that adds the thing?
-			// also need way to access component/scene stuff through Type + void* or something?
+				if (!componentTypes.TryGetValue(scope String(name), out structType))
+					return .Err; // Type not recognized
+			}
+
+			Debug.Assert(structType != null);
+
+			return .Ok;
+		}
+
+		Result<void> DeserializeStructBody(Type structType, Span<uint8> structTargetMem, ref StringView buffer)
+		{
+			EatSpace!(ref buffer);
+			ForceEat!('{', ref buffer);
+
+			if (structTargetMem.Length != structType.Size)
+				return .Err; // Size miss-match!
+
+			Variant structVal = Variant.CreateReference(structType, structTargetMem.Ptr);
+
+			while ({
+				EatSpace!(ref buffer);
+				buffer[0] != '}'
+				})
+			{
+				// Get field name
+				var nameLen = 0;
+				for (; nameLen < buffer.Length; nameLen++)
+					if (!buffer[nameLen].IsLetterOrDigit)
+						break;
+
+				let name = buffer.Substring(0, nameLen);
+				buffer.RemoveFromStart(nameLen);
+
+				EatSpace!(ref buffer);
+				ForceEat!('=', ref buffer);
+				EatSpace!(ref buffer);
+
+				FieldInfo fieldInfo;
+				switch (structType.GetField(scope .(name)))
+				{
+				case .Ok(let val):
+					fieldInfo = val;
+				case .Err:
+					continue; // Field does not exist
+				}
+
+				Variant fieldVal = Variant.CreateReference(fieldInfo.FieldType, ((uint8*)structVal.DataPtr) + fieldInfo.MemberOffset);
+
+				if (DeserializeValue(ref fieldVal, ref buffer) case .Err)
+					return .Err; // Field deserialize error
+
+				EatSpace!(ref buffer);
+
+				if (buffer[0] == ',')
+					buffer.RemoveFromStart(1);
+			}
+
+			ForceEat!('}', ref buffer);
+
+			return .Ok;
+		}
+
+		Result<void> DeserializeValue(ref Variant val, ref StringView buffer)
+		{
+			Type fieldType = val.VariantType;
+
+			if (fieldType.IsInteger)
+			{
+				var numLen = 0;
+				while (buffer.Length > numLen + 1 && buffer[numLen].IsNumber || buffer[numLen] == '-')
+					numLen++;
+
+				if (numLen == 0)
+					return .Err; // No number there
+
+				switch (fieldType)
+				{
+				case typeof(int8), typeof(int16), typeof(int32), typeof(int64), typeof(int):
+					if (int64.Parse(.(&buffer[0], numLen)) case .Ok(var num))
+						Internal.MemCpy(val.DataPtr, &num, fieldType.Size);
+					else return .Err; // Number parsing error
+				default: // unsigned
+					if (uint64.Parse(.(&buffer[0], numLen)) case .Ok(var num))
+						Internal.MemCpy(val.DataPtr, &num, fieldType.Size);
+					else return .Err; // Number parsing error
+				}
+			}
+			else if (fieldType.IsFloatingPoint)
+			{
+				var numLen = 0;
+				while (buffer.Length > numLen + 1 && buffer[numLen].IsNumber || buffer[numLen] == '.' || buffer[numLen] == '-')
+					numLen++;
+
+				if (numLen == 0)
+					return .Err; // No number there
+
+				switch (fieldType)
+				{
+				case typeof(float):
+					if (float.Parse(.(&buffer[0], numLen)) case .Ok(let num))
+						*(float*)val.DataPtr = num;
+				case typeof(double):
+					if (double.Parse(.(&buffer[0], numLen)) case .Ok(let num))
+						*(double*)val.DataPtr = num;
+				default:
+					return .Err; // Invalid floating point
+				}
+			}
+			else if (fieldType == typeof(bool))
+			{
+				if (buffer.StartsWith(bool.TrueString, .OrdinalIgnoreCase))
+					*(bool*)val.DataPtr = true;
+				else if (buffer.StartsWith(bool.FalseString, .OrdinalIgnoreCase))
+					NOP!(); // Is already 0, sooOOo nothing to do here
+				else return .Err; // Invalid bool
+			}
+			else if (fieldType is SizedArrayType)
+			{
+				ForceEat!('[', ref buffer);
+				EatSpace!(ref buffer);
+
+				while ({
+					EatSpace!(ref buffer);
+					buffer[0] != ']'
+					})
+				{
+					// TODO: element parse! (call this)
+
+					EatSpace!(ref buffer);
+
+					if (buffer[0] == ',')
+						buffer.RemoveFromStart(1);
+				}
+	
+				ForceEat!(']', ref buffer);
+			}
+			else if (fieldType.IsEnum)
+			{
+				// TODO: accept numbers, but since we have the enum type we can also accept names
+			}
+			else if (fieldType.IsStruct)
+			{
+				// TODO: Call struct thing. Mind the conversion of type -> Pile.Point2 to Point2 and so on... maybe unify that function of Type conversion!
+			}
+			else return .Err; // Unknown type
 
 			return .Ok;
 		}
