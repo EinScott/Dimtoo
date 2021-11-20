@@ -9,7 +9,8 @@ namespace Dimtoo
 		void ClearData();
 		void OnEntityDestroyed(Entity e);
 
-		bool GetSerializeData(Entity e, out void* data);
+		bool GetSerializeData(Entity e, out Span<uint8> data);
+		Span<uint8> ReserveData(Entity e);
 	}
 
 	class ComponentArray<T> : IComponentArrayBase where T : struct
@@ -85,15 +86,31 @@ namespace Dimtoo
 		}
 
 		[Inline]
-		public bool GetSerializeData(Entity e, out void* data)
+		public bool GetSerializeData(Entity e, out Span<uint8> componentData)
 		{
 			if (entityToIndex.TryGetValue(e, let index))
 			{
-				data = &components[index];
+				componentData = .((uint8*)&components[index], sizeof(T));
 				return true;
 			}
-			data = null;
+			componentData = .();
 			return false;
+		}
+
+		[Inline]
+		public Span<uint8> ReserveData(Entity e)
+		{
+			Debug.Assert(!entityToIndex.ContainsKey(e), "Component added to the same entity more than once");
+
+			let newIndex = count++;
+
+			// Add to lookups
+			entityToIndex.Add(e, newIndex);
+			if (indexToEntity.Count == newIndex)
+				indexToEntity.Add(e);
+			else indexToEntity[newIndex] = e;
+
+			return .((uint8*)&components[newIndex], sizeof(T));
 		}
 	}
 }

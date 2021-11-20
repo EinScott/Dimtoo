@@ -56,6 +56,19 @@ namespace Dimtoo
 			sysMan.OnEntitySignatureChanged(e, sig);
 		}
 
+		public Span<uint8> ReserveComponent(Entity e, Type componentType)
+		{
+			let span = compMan.ReserveComponent(e, componentType);
+
+			var sig = entMan[e];
+			sig.Add(compMan.GetComponentType(componentType));
+			entMan[e] = sig;
+
+			sysMan.OnEntitySignatureChanged(e, sig);
+
+			return span;
+		}
+
 		public void RemoveComponent<T>(Entity e) where T : struct
 		{
 			compMan.RemoveComponent<T>(e);

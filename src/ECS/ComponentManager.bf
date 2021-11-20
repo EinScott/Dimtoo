@@ -51,6 +51,14 @@ namespace Dimtoo
 		}
 
 		[Inline]
+		public Span<uint8> ReserveComponent(Entity e, Type componentType)
+		{
+			Debug.Assert(componentArrays.ContainsKey(componentType), "Component type not registered");
+
+			return componentArrays[componentType].array.ReserveData(e);
+		}
+
+		[Inline]
 		public void RemoveComponent<T>(Entity e) where T : struct
 		{
 			GetComponentArray<T>().RemoveData(e);
