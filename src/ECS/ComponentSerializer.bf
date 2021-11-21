@@ -27,7 +27,9 @@ namespace Dimtoo
 				{
 					let name = new System.String();
 					Dimtoo.ComponentSerializer.[System.FriendAttribute]TypeToString!(typeof(Self), name);
-					Dimtoo.ComponentSerializer.serializableStructs.Add(name, typeof(Self));
+					if (!Dimtoo.ComponentSerializer.serializableStructs.ContainsKey(name))
+						Dimtoo.ComponentSerializer.serializableStructs.Add(name, typeof(Self));
+					else System.Runtime.FatalError("Component name already taken");
 				}
 				""");
 		}
@@ -47,6 +49,8 @@ namespace Dimtoo
 		static mixin TypeToString(Type type, String buffer)
 		{
 			let name = type.GetFullName(.. scope .(64));
+			let namespaceLen = name.LastIndexOf('.');
+			name.Remove(0, namespaceLen + 1);
 			if (name.Contains("void"))
 			{
 				name.Append('_');
@@ -93,8 +97,15 @@ namespace Dimtoo
 
 			for (let entry in compMan.[Friend]componentArrays) // TODO: more general interface!
 				if (entry.value.array.GetSerializeData(e, let data))
+				{
+					let oldLen = buffer.Length;
+					TypeToString!(entry.key, buffer);
+					buffer.Append(": ");
+
 					if (SerializeStruct(entry.key, Variant.CreateReference(entry.key, data.Ptr), buffer, includeDefault))
 						buffer.Append(",\n");
+					else buffer.RemoveFromEnd(buffer.Length - oldLen); // Remove what we already wrote again
+				}
 
 			RemoveTrailingComma!(buffer);
 
@@ -112,7 +123,6 @@ namespace Dimtoo
 				return false;
 			}
 
-			TypeToString!(structType, buffer);
 			buffer.Append("{\n");
 
 			for (let m in structType.GetFields(.Public|.Instance))
@@ -155,7 +165,7 @@ namespace Dimtoo
 			return true;
 		}
 
-		bool SerializeValue(ref Variant val, String buffer, bool includeDefault)
+		bool SerializeValue(ref Variant val, String buffer, bool includeDefault, bool smallBool = false)
 		{
 			Type fieldType = val.VariantType;
 
@@ -190,7 +200,14 @@ namespace Dimtoo
 			}
 			else if (fieldType == typeof(bool))
 			{
-				val.Get<bool>().ToString(buffer);
+				if (!smallBool)
+					val.Get<bool>().ToString(buffer);
+				else
+				{
+					if (val.Get<bool>())
+						buffer.Append('1');
+					else buffer.Append('0');
+				}
 			}
 			else if (fieldType is SizedArrayType)
 			{
@@ -206,7 +223,7 @@ namespace Dimtoo
 				{
 					var arrVal = Variant.CreateReference(arrType, ptr);
 
-					if (SerializeValue(ref arrVal, buffer, includeDefault))
+					if (SerializeValue(ref arrVal, buffer, includeDefault, true))
 					{
 						if (!arrType.IsPrimitive)
 							buffer.Append(",\n");
@@ -351,12 +368,20 @@ namespace Dimtoo
 				})
 			{
 				// Get type from name
-				Try!(DeserializeStructType(let componentType, ref buffer));
+				Try!(DeserializeComponentType(let componentType, ref buffer));
 
 				let structMemory = scene.ReserveComponent(e, componentType);
 
+				EatSpace!(ref buffer);
+				ForceEat!(':', ref buffer);
+
 				// Fill in type from body
-				Try!(DeserializeStructBody(componentType, structMemory, ref buffer));
+				EatSpace!(ref buffer);
+				if (!buffer.StartsWith("{}"))
+				{
+					Try!(DeserializeStructBody(componentType, structMemory, ref buffer));
+				}
+				else buffer.RemoveFromStart(2); // just empty brackets, nothing to do
 
 				EatSpace!(ref buffer);
 
@@ -369,7 +394,7 @@ namespace Dimtoo
 			return .Ok;
 		}
 
-		Result<void> DeserializeStructType(out Type structType, ref StringView buffer)
+		Result<void> DeserializeComponentType(out Type structType, ref StringView buffer)
 		{
 			EatSpace!(ref buffer);
 
@@ -399,7 +424,7 @@ namespace Dimtoo
 				buffer.RemoveFromStart(nameLen);
 
 				if (!serializableStructs.TryGetValue(scope String(name), out structType))
-					LogErrorReturn!(scope $"Unrecognized struct name: {name} (not marked as [Serializable]?)");
+					LogErrorReturn!(scope $"Unrecognized component name: {name} (not marked as [Serializable]?)");
 			}
 
 			Debug.Assert(structType != null);
@@ -409,7 +434,6 @@ namespace Dimtoo
 
 		Result<void> DeserializeStructBody(Type structType, Span<uint8> structTargetMem, ref StringView buffer)
 		{
-			EatSpace!(ref buffer);
 			ForceEat!('{', ref buffer);
 
 			Debug.Assert(structTargetMem.Length == structType.Size); // Size miss-match
@@ -517,10 +541,20 @@ namespace Dimtoo
 					*(bool*)val.DataPtr = true;
 					buffer.RemoveFromStart(bool.TrueString.Length);
 				}
+				else if (buffer[0] == '1')
+				{
+					*(bool*)val.DataPtr = true;
+					buffer.RemoveFromStart(1);
+				}
 				else if (buffer.StartsWith(bool.FalseString, .OrdinalIgnoreCase))
 				{
 					// Is already 0, sooOOo nothing to do here
 					buffer.RemoveFromStart(bool.FalseString.Length);
+				}
+				else if (buffer[0] == '0')
+				{
+					// Is already 0, sooOOo nothing to do here
+					buffer.RemoveFromStart(1);
 				}
 				else LogErrorReturn!("Failed to parse bool");
 			}
@@ -612,11 +646,6 @@ namespace Dimtoo
 			{
 				var structType = fieldType;
 				ConvertFakeTypes(ref structType);
-
-				Try!(DeserializeStructType(let checkStructType, ref buffer));
-
-				if (structType != checkStructType && !checkStructType.IsSubtypeOf(structType))
-					LogErrorReturn!("Struct type miss-match");
 
 				Try!(DeserializeStructBody(structType, .((uint8*)val.DataPtr, fieldType.Size), ref buffer));
 			}
