@@ -2,6 +2,7 @@ using Pile;
 
 namespace Dimtoo
 {
+	[Serializable]
 	struct TransformComponent
 	{
 		public Vector2 position;

@@ -11,6 +11,9 @@ namespace Dimtoo
 	// CUSTOMSERIALIZE attribute? -> call some function to fill in the type fully after the base deserialize! -> for things that need assets?
 	// STRINGS???
 
+	// LEAVE OUT the type names of non-components?
+	// -> we really know everything from the on!
+
 	[AttributeUsage(.Struct|.Enum, .AlwaysIncludeTarget | .ReflectAttribute, ReflectUser = .AllMembers, AlwaysIncludeUser = .IncludeAllMethods | .AssumeInstantiated)]
 	struct SerializableAttribute : Attribute, IComptimeTypeApply
 	{
@@ -21,11 +24,11 @@ namespace Dimtoo
 			
 			Compiler.EmitTypeBody(type, """
 				static this
-				{{
-					let name = new String();
-					ComponentSerializer.[Friend]TypeToString!(typeof(Self), name);
-					ComponentSerializer.serializableStructs.Add(name, typeof(Self));
-				}}
+				{
+					let name = new System.String();
+					Dimtoo.ComponentSerializer.[System.FriendAttribute]TypeToString!(typeof(Self), name);
+					Dimtoo.ComponentSerializer.serializableStructs.Add(name, typeof(Self));
+				}
 				""");
 		}
 	}
@@ -56,7 +59,7 @@ namespace Dimtoo
 		{
 			bool isZero = true;
 			for (var i < val.VariantType.Size)
-				if (*(uint8*)val.DataPtr != 0)
+				if (((uint8*)val.DataPtr)[i] != 0)
 					isZero = false;
 			isZero
 		}
@@ -105,7 +108,7 @@ namespace Dimtoo
 
 			if (!structType.HasCustomAttribute<SerializableAttribute>())
 			{
-				//Log.Debug(scope $"Struct {structType} is not marked as [Serializable] and will not be included");
+				Log.Debug(scope $"Struct {structType} is not marked as [Serializable] and will not be included");
 				return false;
 			}
 

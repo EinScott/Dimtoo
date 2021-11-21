@@ -18,6 +18,9 @@ namespace Dimtoo
 		}
 
 		[Inline]
+		public bool EntityLives(Entity e) => livingEntities.Contains(e);
+
+		[Inline]
 		public void ClearEntities()
 		{
 			availableEntities.Clear();

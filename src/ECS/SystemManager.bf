@@ -7,7 +7,7 @@ namespace Dimtoo
 	abstract class ComponentSystem
 	{
 		public readonly Span<Type> signatureTypes;
-		public readonly HashSet<Entity> entities = new HashSet<uint16>() ~ delete _;
+		public readonly HashSet<Entity> entities = new .() ~ delete _;
 		public ComponentManager componentManager;
 	}
 

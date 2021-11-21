@@ -43,10 +43,14 @@ namespace Dimtoo
 		}
 
 		[Inline]
+		public bool EntityLives(Entity e) => entMan.EntityLives(e);
+
+		[Inline]
 		public void RegisterComponent<T>() where T : struct => compMan.RegisterComponent<T>();
 
 		public void AddComponent<T>(Entity e, T component) where T : struct
 		{
+			Debug.Assert(entMan.EntityLives(e));
 			compMan.AddComponent(e, component);
 
 			var sig = entMan[e];
@@ -58,6 +62,7 @@ namespace Dimtoo
 
 		public Span<uint8> ReserveComponent(Entity e, Type componentType)
 		{
+			Debug.Assert(entMan.EntityLives(e));
 			let span = compMan.ReserveComponent(e, componentType);
 
 			var sig = entMan[e];

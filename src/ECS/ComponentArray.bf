@@ -42,6 +42,21 @@ namespace Dimtoo
 			else indexToEntity[newIndex] = e;
 		}
 
+		public Span<uint8> ReserveData(Entity e)
+		{
+			Debug.Assert(!entityToIndex.ContainsKey(e), "Component added to the same entity more than once");
+
+			let newIndex = count++;
+
+			// Add to lookups
+			entityToIndex.Add(e, newIndex);
+			if (indexToEntity.Count == newIndex)
+				indexToEntity.Add(e);
+			else indexToEntity[newIndex] = e;
+
+			return .((uint8*)&components[newIndex], sizeof(T));
+		}
+
 		public void RemoveData(Entity e)
 		{
 			Debug.Assert(entityToIndex.ContainsKey(e), "Component not present on this entity");
@@ -95,22 +110,6 @@ namespace Dimtoo
 			}
 			componentData = .();
 			return false;
-		}
-
-		[Inline]
-		public Span<uint8> ReserveData(Entity e)
-		{
-			Debug.Assert(!entityToIndex.ContainsKey(e), "Component added to the same entity more than once");
-
-			let newIndex = count++;
-
-			// Add to lookups
-			entityToIndex.Add(e, newIndex);
-			if (indexToEntity.Count == newIndex)
-				indexToEntity.Add(e);
-			else indexToEntity[newIndex] = e;
-
-			return .((uint8*)&components[newIndex], sizeof(T));
 		}
 	}
 }
