@@ -11,9 +11,6 @@ namespace Dimtoo
 	// CUSTOMSERIALIZE attribute? -> call some function to fill in the type fully after the base deserialize! -> for things that need assets?
 	// STRINGS???
 
-	// LEAVE OUT the type names of non-components?
-	// -> we really know everything from the on!
-
 	[AttributeUsage(.Struct|.Enum, .AlwaysIncludeTarget | .ReflectAttribute, ReflectUser = .AllMembers, AlwaysIncludeUser = .IncludeAllMethods | .AssumeInstantiated)]
 	struct SerializableAttribute : Attribute, IComptimeTypeApply
 	{
@@ -74,13 +71,13 @@ namespace Dimtoo
 				buffer.RemoveFromEnd(2);
 		}
 
-		public void GetSerializeString(Scene scene, String buffer, bool exactEntity = true, bool includeDefault = false)
+		public void SerializeScene(Scene scene, String buffer, bool exactEntity = true, bool includeDefault = false)
 		{
 			buffer.Append("[\n");
 
 			for (let entity in scene.[Friend]entMan.EnumerateEntities())
 			{
-				GetSerializeString(entity, buffer, exactEntity, includeDefault);
+				SerializeEntity(entity, buffer, exactEntity, includeDefault);
 				buffer.Append(",\n");
 			}
 
@@ -89,7 +86,7 @@ namespace Dimtoo
 			buffer.Append("\n]");
 		}
 
-		public void GetSerializeString(Entity e, String buffer, bool exactEntity = true, bool includeDefault = false)
+		public void SerializeEntity(Entity e, String buffer, bool exactEntity = true, bool includeDefault = false)
 		{
 			if (exactEntity)
 				buffer.Append(scope $"{e}: [\n");
@@ -299,7 +296,7 @@ namespace Dimtoo
 			buffer.RemoveFromStart(i);
 		}
 
-		public Result<void> DeserializeFromString(Scene scene, StringView buffer)
+		public Result<void> DeserializeScene(Scene scene, StringView buffer)
 		{
 			var buffer;
 			EatSpace!(ref buffer);
@@ -313,7 +310,7 @@ namespace Dimtoo
 				buffer[0] != ']'
 				})
 			{
-				Try!(DeserializeEntityFromString(scene, ref buffer));
+				Try!(DeserializeEntity(scene, buffer));
 
 				EatSpace!(ref buffer);
 
@@ -326,8 +323,9 @@ namespace Dimtoo
 			return .Ok;
 		}
 
-		public Result<void> DeserializeEntityFromString(Scene scene, ref StringView buffer)
+		public Result<void> DeserializeEntity(Scene scene, StringView buffer)
 		{
+			var buffer;
 			EatSpace!(ref buffer);
 
 			Entity e;

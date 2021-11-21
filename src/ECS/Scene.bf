@@ -30,10 +30,22 @@ namespace Dimtoo
 		}
 
 		[Inline]
+		public void SerializeScene(String buffer, bool includeDefault = false, bool exactEntity = true) => serializer.SerializeScene(this, buffer, exactEntity, includeDefault);
+
+		[Inline]
+		public bool DeserializeScene(StringView saveString) => serializer.DeserializeScene(this, saveString) case .Ok;
+
+		[Inline]
 		public Entity CreateEntity() => entMan.CreateEntity();
 
 		[Inline]
 		public Result<void> CreateSpecificEntitiy(Entity e) => entMan.CreateSpecificEntity(e);
+
+		[Inline]
+		public bool DeserializeEntity(StringView saveString) => serializer.DeserializeEntity(this, saveString) case .Ok;
+
+		[Inline]
+		public void SerializeEntity(Entity e, String buffer, bool includeDefault = false, bool exactEntity = false) => serializer.SerializeEntity(e, buffer, exactEntity, includeDefault);
 
 		public void DestroyEntity(Entity e)
 		{
