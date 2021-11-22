@@ -71,6 +71,9 @@ namespace Dimtoo
 		public bool EntityLives(Entity e) => entMan.EntityLives(e);
 
 		[Inline]
+		public HashSet<Entity>.Enumerator EnumerateEntities() => entMan.EnumerateEntities();
+
+		[Inline]
 		public void RegisterComponent<T>() where T : struct => compMan.RegisterComponent<T>();
 
 		public void AddComponent<T>(Entity e, T component) where T : struct

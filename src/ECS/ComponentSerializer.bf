@@ -72,10 +72,24 @@ namespace Dimtoo
 		{
 			buffer.Append("[\n");
 
-			for (let entity in scene.[Friend]entMan.EnumerateEntities())
+			Entity[] ent = null;
+			if (!exactEntity)
 			{
-				SerializeEntity(scene, entity, buffer, exactEntity, includeDefault);
-				buffer.Append(",\n");
+				// For this to work, we need a predictable order
+				ent = scene.[Friend]entMan.[Friend]livingEntities.CopyTo(.. scope Entity[scene.[Friend]entMan.[Friend]livingEntities.Count]);
+				for (let entity in ent)
+				{
+					SerializeEntity(scene, entity, buffer, ent, exactEntity, includeDefault);
+					buffer.Append(",\n");
+				}
+			}
+			else
+			{
+				for (let entity in scene.EnumerateEntities())
+				{
+					SerializeEntity(scene, entity, buffer, .(), exactEntity, includeDefault);
+					buffer.Append(",\n");
+				}
 			}
 
 			RemoveTrailingComma!(buffer);
@@ -92,7 +106,7 @@ namespace Dimtoo
 				if (!scene.EntityLives(entity))
 					continue;
 
-				SerializeEntity(scene, entity, buffer, exactEntity, includeDefault);
+				SerializeEntity(scene, entity, buffer, exactEntity ? .() : entities, exactEntity, includeDefault);
 				buffer.Append(",\n");
 			}
 
@@ -101,7 +115,7 @@ namespace Dimtoo
 			buffer.Append("\n]");
 		}
 
-		void SerializeEntity(Scene scene, Entity e, String buffer, bool exactEntity = true, bool includeDefault = false)
+		void SerializeEntity(Scene scene, Entity e, String buffer, Span<Entity> entities, bool exactEntity, bool includeDefault)
 		{
 			if (exactEntity)
 				buffer.Append(scope $"{e}: [\n");
@@ -114,7 +128,7 @@ namespace Dimtoo
 					TypeToString!(entry.key, buffer);
 					buffer.Append(": ");
 
-					if (SerializeStruct(entry.key, Variant.CreateReference(entry.key, data.Ptr), buffer, includeDefault))
+					if (SerializeStruct(entry.key, Variant.CreateReference(entry.key, data.Ptr), buffer, entities, includeDefault))
 						buffer.Append(",\n");
 					else buffer.RemoveFromEnd(buffer.Length - oldLen); // Remove what we already wrote again
 				}
@@ -124,7 +138,7 @@ namespace Dimtoo
 			buffer.Append("\n]");
 		}
 
-		bool SerializeStruct(Type structType, Variant structVal, String buffer, bool includeDefault)
+		bool SerializeStruct(Type structType, Variant structVal, String buffer, Span<Entity> entities, bool includeDefault)
 		{
 			var structVal;
 			Debug.Assert(structType.IsStruct);
@@ -151,7 +165,7 @@ namespace Dimtoo
 				buffer.Append(m.Name);
 				buffer.Append("=");
 
-				let mention = SerializeValue(ref val, buffer, includeDefault);
+				let mention = SerializeValue(ref val, buffer, entities, includeDefault);
 
 				if (!mention)
 				{
@@ -177,7 +191,7 @@ namespace Dimtoo
 			return true;
 		}
 
-		bool SerializeValue(ref Variant val, String buffer, bool includeDefault, bool smallBool = false)
+		bool SerializeValue(ref Variant val, String buffer, Span<Entity> entities, bool includeDefault, bool smallBool = false)
 		{
 			Type fieldType = val.VariantType;
 
@@ -194,7 +208,30 @@ namespace Dimtoo
 				default: // unsigned
 					uint64 integer = 0;
 					Span<uint8>((uint8*)val.DataPtr, fieldType.Size).CopyTo(Span<uint8>((uint8*)&integer, sizeof(uint64)));
-					integer.ToString(buffer);
+
+					if (entities.Ptr != null && fieldType == typeof(Entity))
+					{
+						// If we don't keep the id's of entities, convert those to ref indices in the save data
+						// entities.Ptr will only not be null, when we do not keep entity ids
+
+						bool found = false;
+						for (let i < entities.Length)
+							if (entities[i] == (Entity)integer)
+							{
+								found = true;
+
+								// Instead reference that the value is the id of the 'x'th entity we're saving
+								buffer.Append('&');
+								i.ToString(buffer);
+							}
+
+						if (!found)
+						{
+							Log.Warn("A serialized component contains a reference to an entity not included in the save. Since the save does not include exact entity ids, this field will not be serialized!");
+							return false;
+						}
+					}
+					else integer.ToString(buffer);
 				}
 			}
 			else if (fieldType.IsFloatingPoint)
@@ -235,7 +272,7 @@ namespace Dimtoo
 				{
 					var arrVal = Variant.CreateReference(arrType, ptr);
 
-					if (SerializeValue(ref arrVal, buffer, includeDefault, true))
+					if (SerializeValue(ref arrVal, buffer, entities, includeDefault, true))
 					{
 						if (!arrType.IsPrimitive)
 							buffer.Append(",\n");
@@ -281,7 +318,7 @@ namespace Dimtoo
 				if (ConvertFakeTypes(ref structType))
 					val.[Friend]mStructType = ((int)Internal.UnsafeCastToPtr(structType) & ~3) + + (val.[Friend]mStructType & 3); // Put fake type into variant for further use with reflection
 
-				return SerializeStruct(structType, val, buffer, includeDefault);
+				return SerializeStruct(structType, val, buffer, entities, includeDefault);
 			}
 			else
 			{
@@ -320,12 +357,15 @@ namespace Dimtoo
 
 			EatSpace!(ref buffer);
 
+			let deserializedEntities = scope List<Entity>();
+			let deferResolveEntityRefs = scope List<(int indexRef, Variant value)>();
+
 			while ({
 				EatSpace!(ref buffer);
 				buffer[0] != ']'
 				})
 			{
-				Try!(DeserializeEntity(scene, ref buffer));
+				Try!(DeserializeEntity(scene, ref buffer, deserializedEntities, deferResolveEntityRefs));
 
 				EatSpace!(ref buffer);
 
@@ -335,10 +375,21 @@ namespace Dimtoo
 
 			ForceEat!(']', ref buffer);
 
+			if (deferResolveEntityRefs.Count > 0)
+			{
+				// This list should be filled with at least something, since clearly values were read
+				// And new entities should have been created
+				Debug.Assert(deserializedEntities.Count != 0);
+
+				// Fill in all these values with the Entity values we get from the array
+				for (var set in deferResolveEntityRefs)
+					*((Entity*)set.value.DataPtr) = deserializedEntities[set.indexRef];
+			}
+
 			return .Ok;
 		}
 
-		Result<void> DeserializeEntity(Scene scene, ref StringView buffer)
+		Result<void> DeserializeEntity(Scene scene, ref StringView buffer, List<Entity> deserializedEntities, List<(int indexRef, Variant value)> deferResolveEntityRefs)
 		{
 			EatSpace!(ref buffer);
 
@@ -370,6 +421,9 @@ namespace Dimtoo
 			{
 				// Just take any available entity
 				e = scene.CreateEntity();
+
+				// We will only need these in the case where we don't store exact entity ids
+				deserializedEntities.Add(e);
 			}
 
 			ForceEat!('[', ref buffer);
@@ -391,7 +445,7 @@ namespace Dimtoo
 				EatSpace!(ref buffer);
 				if (!buffer.StartsWith("{}"))
 				{
-					Try!(DeserializeStructBody(componentType, structMemory, ref buffer));
+					Try!(DeserializeStructBody(componentType, structMemory, ref buffer, deferResolveEntityRefs));
 				}
 				else buffer.RemoveFromStart(2); // just empty brackets, nothing to do
 
@@ -444,7 +498,7 @@ namespace Dimtoo
 			return .Ok;
 		}
 
-		Result<void> DeserializeStructBody(Type structType, Span<uint8> structTargetMem, ref StringView buffer)
+		Result<void> DeserializeStructBody(Type structType, Span<uint8> structTargetMem, ref StringView buffer, List<(int indexRef, Variant value)> deferResolveEntityRefs)
 		{
 			ForceEat!('{', ref buffer);
 
@@ -481,7 +535,7 @@ namespace Dimtoo
 
 				Variant fieldVal = Variant.CreateReference(fieldInfo.FieldType, ((uint8*)structVal.DataPtr) + fieldInfo.MemberOffset);
 
-				Try!(DeserializeValue(ref fieldVal, ref buffer));
+				Try!(DeserializeValue(ref fieldVal, ref buffer, deferResolveEntityRefs));
 
 				EatSpace!(ref buffer);
 
@@ -494,12 +548,22 @@ namespace Dimtoo
 			return .Ok;
 		}
 
-		Result<void> DeserializeValue(ref Variant val, ref StringView buffer)
+		Result<void> DeserializeValue(ref Variant val, ref StringView buffer, List<(int indexRef, Variant value)> deferResolveEntityRefs)
 		{
 			Type fieldType = val.VariantType;
 
 			if (fieldType.IsInteger)
 			{
+				bool isRef = false;
+				if (buffer[0] == '&')
+				{
+					if (fieldType != typeof(Entity))
+						LogErrorReturn!("References are exclusive to Entity type fields");
+
+					isRef = true;
+					buffer.RemoveFromStart(1);
+				}
+
 				var numLen = 0;
 				while (buffer.Length > numLen + 1 && buffer[numLen].IsNumber || buffer[numLen] == '-')
 					numLen++;
@@ -510,13 +574,27 @@ namespace Dimtoo
 				switch (fieldType)
 				{
 				case typeof(int8), typeof(int16), typeof(int32), typeof(int64), typeof(int):
+					Debug.Assert(!isRef);
+
 					if (int64.Parse(.(&buffer[0], numLen)) case .Ok(var num))
 						Internal.MemCpy(val.DataPtr, &num, fieldType.Size);
 					else LogErrorReturn!("Failed to parse integer");
 				default: // unsigned
-					if (uint64.Parse(.(&buffer[0], numLen)) case .Ok(var num))
-						Internal.MemCpy(val.DataPtr, &num, fieldType.Size);
-					else LogErrorReturn!("Failed to parse integer");
+					if (!isRef)
+					{
+						if (uint64.Parse(.(&buffer[0], numLen)) case .Ok(var num))
+						{
+							// Resolve these later when we have the full list of newly created entities and their ids
+							deferResolveEntityRefs.Add(((.)num, val));
+						}	
+						else LogErrorReturn!("Failed to parse reference");
+					}
+					else
+					{
+						if (uint64.Parse(.(&buffer[0], numLen)) case .Ok(var num))
+							Internal.MemCpy(val.DataPtr, &num, fieldType.Size);
+						else LogErrorReturn!("Failed to parse integer");
+					}
 				}
 
 				buffer.RemoveFromStart(numLen);
@@ -590,7 +668,7 @@ namespace Dimtoo
 						LogErrorReturn!("Too many elements given in array");
 
 					var arrVal = Variant.CreateReference(arrType, ptr);
-					Try!(DeserializeValue(ref arrVal, ref buffer));
+					Try!(DeserializeValue(ref arrVal, ref buffer, deferResolveEntityRefs));
 
 					ptr += arrType.Size;
 					i++;
@@ -659,7 +737,7 @@ namespace Dimtoo
 				var structType = fieldType;
 				ConvertFakeTypes(ref structType);
 
-				Try!(DeserializeStructBody(structType, .((uint8*)val.DataPtr, fieldType.Size), ref buffer));
+				Try!(DeserializeStructBody(structType, .((uint8*)val.DataPtr, fieldType.Size), ref buffer, deferResolveEntityRefs));
 			}
 			else LogErrorReturn!("Cannot handle value");
 
