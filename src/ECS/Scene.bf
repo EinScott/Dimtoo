@@ -20,7 +20,7 @@ namespace Dimtoo
 		protected readonly ComponentManager compMan = new .() ~ delete _;
 		protected readonly EntityManager entMan = new .() ~ delete _;
 
-		protected readonly ComponentSerializer serializer = new .(compMan) ~ delete _;
+		protected readonly ComponentSerializer serializer = new .() ~ delete _;
 
 		public void Clear()
 		{
@@ -30,22 +30,35 @@ namespace Dimtoo
 		}
 
 		[Inline]
-		public void SerializeScene(String buffer, bool includeDefault = false, bool exactEntity = true) => serializer.SerializeScene(this, buffer, exactEntity, includeDefault);
+		public void SerializeScene(String buffer, bool includeDefault = false) => serializer.SerializeScene(this, buffer, true, includeDefault);
 
 		[Inline]
-		public bool DeserializeScene(StringView saveString) => serializer.DeserializeScene(this, saveString) case .Ok;
+		public void SerializeSceneAsGroup(String buffer, bool includeDefault = false) => serializer.SerializeScene(this, buffer, false, includeDefault);
+
+		[Inline]
+		public bool DeserializeScene(StringView saveString)
+		{
+			Clear();
+			return serializer.Deserialize(this, saveString) case .Ok;
+		}
+
+		[Inline]
+		public void SerializeGroup(Entity single, String buffer, bool includeDefault = false) => serializer.SerializeGroup(this, scope Entity[1](single), buffer, false, includeDefault);
+
+		[Inline]
+		public void SerializeGroup(String buffer, params Entity[] entities) => serializer.SerializeGroup(this, entities, buffer, false, false);
+
+		[Inline]
+		public void SerializeGroup(String buffer, bool includeDefault, params Entity[] entities) => serializer.SerializeGroup(this, entities, buffer, false, includeDefault);
+
+		[Inline]
+		public bool CreateFromGroup(StringView saveString) => serializer.Deserialize(this, saveString) case .Ok;
 
 		[Inline]
 		public Entity CreateEntity() => entMan.CreateEntity();
 
 		[Inline]
 		public Result<void> CreateSpecificEntitiy(Entity e) => entMan.CreateSpecificEntity(e);
-
-		[Inline]
-		public bool DeserializeEntity(StringView saveString) => serializer.DeserializeEntity(this, saveString) case .Ok;
-
-		[Inline]
-		public void SerializeEntity(Entity e, String buffer, bool includeDefault = false, bool exactEntity = false) => serializer.SerializeEntity(e, buffer, exactEntity, includeDefault);
 
 		public void DestroyEntity(Entity e)
 		{

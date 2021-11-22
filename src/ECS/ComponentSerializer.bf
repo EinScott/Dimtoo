@@ -11,6 +11,10 @@ namespace Dimtoo
 	// CUSTOMSERIALIZE attribute? -> call some function to fill in the type fully after the base deserialize! -> for things that need assets?
 	// STRINGS???
 
+	// TODO: in groups, make enitity values relative to their index in the save
+	// when deserializing, in case of a ref on Entity, defer those Variants to some list together with the ref index, cache the deserialized entity's ids by index
+	// and then put that all together in the end
+
 	[AttributeUsage(.Struct|.Enum, .AlwaysIncludeTarget | .ReflectAttribute, ReflectUser = .AllMembers, AlwaysIncludeUser = .IncludeAllMethods | .AssumeInstantiated)]
 	struct SerializableAttribute : Attribute, IComptimeTypeApply
 	{
@@ -35,13 +39,6 @@ namespace Dimtoo
 	class ComponentSerializer
 	{
 		public static Dictionary<String, Type> serializableStructs = new .() ~ DeleteDictionaryAndKeys!(_);
-
-		ComponentManager compMan;
-
-		public this(ComponentManager comp)
-		{
-			compMan = comp;
-		}
 
 		static mixin TypeToString(Type type, String buffer)
 		{
@@ -77,7 +74,7 @@ namespace Dimtoo
 
 			for (let entity in scene.[Friend]entMan.EnumerateEntities())
 			{
-				SerializeEntity(entity, buffer, exactEntity, includeDefault);
+				SerializeEntity(scene, entity, buffer, exactEntity, includeDefault);
 				buffer.Append(",\n");
 			}
 
@@ -86,13 +83,31 @@ namespace Dimtoo
 			buffer.Append("\n]");
 		}
 
-		public void SerializeEntity(Entity e, String buffer, bool exactEntity = true, bool includeDefault = false)
+		public void SerializeGroup(Scene scene, Entity[] entities, String buffer, bool exactEntity = true, bool includeDefault = false)
+		{
+			buffer.Append("[\n");
+
+			for (let entity in entities)
+			{
+				if (!scene.EntityLives(entity))
+					continue;
+
+				SerializeEntity(scene, entity, buffer, exactEntity, includeDefault);
+				buffer.Append(",\n");
+			}
+
+			RemoveTrailingComma!(buffer);
+
+			buffer.Append("\n]");
+		}
+
+		void SerializeEntity(Scene scene, Entity e, String buffer, bool exactEntity = true, bool includeDefault = false)
 		{
 			if (exactEntity)
 				buffer.Append(scope $"{e}: [\n");
 			else buffer.Append("[\n");
 
-			for (let entry in compMan.[Friend]componentArrays) // TODO: more general interface!
+			for (let entry in scene.compMan.[Friend]componentArrays) // TODO: more general interface!
 				if (entry.value.array.GetSerializeData(e, let data))
 				{
 					let oldLen = buffer.Length;
@@ -296,7 +311,7 @@ namespace Dimtoo
 			buffer.RemoveFromStart(i);
 		}
 
-		public Result<void> DeserializeScene(Scene scene, StringView buffer)
+		public Result<void> Deserialize(Scene scene, StringView buffer)
 		{
 			var buffer;
 			EatSpace!(ref buffer);
@@ -310,7 +325,7 @@ namespace Dimtoo
 				buffer[0] != ']'
 				})
 			{
-				Try!(DeserializeEntity(scene, buffer));
+				Try!(DeserializeEntity(scene, ref buffer));
 
 				EatSpace!(ref buffer);
 
@@ -323,9 +338,8 @@ namespace Dimtoo
 			return .Ok;
 		}
 
-		public Result<void> DeserializeEntity(Scene scene, StringView buffer)
+		Result<void> DeserializeEntity(Scene scene, ref StringView buffer)
 		{
-			var buffer;
 			EatSpace!(ref buffer);
 
 			Entity e;
