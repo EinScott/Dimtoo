@@ -14,7 +14,7 @@ namespace Dimtoo
 		public this()
 		{
 			for (var i = MAX_ENTITIES - 1; i >= 0; i--)
-				availableEntities.Add((uint16)i);
+				availableEntities.Add((Entity)i);
 		}
 
 		[Inline]
@@ -25,7 +25,7 @@ namespace Dimtoo
 		{
 			availableEntities.Clear();
 			for (var i = MAX_ENTITIES - 1; i >= 0; i--)
-				availableEntities.Add((uint16)i);
+				availableEntities.Add((Entity)i);
 
 			signatures = .();
 			livingEntities.Clear();
@@ -59,7 +59,7 @@ namespace Dimtoo
 			
 			livingEntities.Remove(e);
 			availableEntities.Add(e);
-			signatures[e] = default;
+			signatures[(int)e] = default;
 		}
 
 		public Signature this[Entity e]
@@ -69,7 +69,7 @@ namespace Dimtoo
 			{
 				Debug.Assert(e < MAX_ENTITIES, "Entity out of range");
 
-				return signatures[e];
+				return signatures[(int)e];
 			}
 
 			[Inline]
@@ -77,7 +77,7 @@ namespace Dimtoo
 			{
 				Debug.Assert(e < MAX_ENTITIES, "Entity out of range");
 
-				signatures[e] = value;
+				signatures[(int)e] = value;
 			}
 		}
 

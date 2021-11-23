@@ -5,12 +5,39 @@ using Pile;
 
 namespace Dimtoo
 {
-	typealias Entity = uint16;
+	// We want a distinction between empty/invalid entities and just, the 0th entity
+	// with indices being unaffected. So all valid entities have the Mask bit on them
+	// (and are thus serialized)
+	struct Entity : IHashable
+	{
+		public const Entity Invalid = default;
+		const uint16 Mask = 1 << 15;
+
+		uint16 val;
+
+#unwarn
+		public static implicit operator uint16(Entity e) => (*((uint16*)&e) & ~Mask);
+		public static implicit operator Entity(int i)
+		{
+			var b = (uint16)i | Mask;
+			return *((Entity*)&b);
+		}
+
+		public override void ToString(String strBuffer)
+		{
+			(val & ~Mask).ToString(strBuffer);
+		}
+
+		public int GetHashCode()
+		{
+			return (val & ~Mask).GetHashCode();
+		}
+	}
 	typealias ComponentType = uint8;
 
 	static
 	{
-		public const Entity MAX_ENTITIES = 4096;
+		public const uint16 MAX_ENTITIES = 4096;
 		public const ComponentType MAX_COMPONENTS = 64;
 	}
 

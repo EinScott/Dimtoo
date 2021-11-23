@@ -11,9 +11,7 @@ namespace Dimtoo
 	// CUSTOMSERIALIZE attribute? -> call some function to fill in the type fully after the base deserialize! -> for things that need assets?
 	// STRINGS???
 
-	// TODO: in groups, make enitity values relative to their index in the save
-	// when deserializing, in case of a ref on Entity, defer those Variants to some list together with the ref index, cache the deserialized entity's ids by index
-	// and then put that all together in the end
+	// TODO: when deserializing, option to put all the created entities into a list/span!
 
 	[AttributeUsage(.Struct|.Enum, .AlwaysIncludeTarget | .ReflectAttribute, ReflectUser = .AllMembers, AlwaysIncludeUser = .IncludeAllMethods | .AssumeInstantiated)]
 	struct SerializableAttribute : Attribute, IComptimeTypeApply
@@ -158,7 +156,7 @@ namespace Dimtoo
 
 				Variant val = Variant.CreateReference(m.FieldType, ((uint8*)structVal.DataPtr) + m.MemberOffset);
 
-				if (VariantDataIsZero!(val))
+				if (!includeDefault && VariantDataIsZero!(val))
 					continue;
 
 				let oldLen = buffer.Length;
@@ -203,35 +201,12 @@ namespace Dimtoo
 				{
 				case typeof(int8), typeof(int16), typeof(int32), typeof(int64), typeof(int):
 					int64 integer = 0;
-					Span<uint8>((uint8*)val.DataPtr, fieldType.Size).CopyTo(Span<uint8>((uint8*)&integer, sizeof(int64)));
+					Span<uint8>((uint8*)val.DataPtr, fieldType.Size).CopyTo(Span<uint8>((uint8*)&integer, fieldType.Size));
 					integer.ToString(buffer);
 				default: // unsigned
 					uint64 integer = 0;
-					Span<uint8>((uint8*)val.DataPtr, fieldType.Size).CopyTo(Span<uint8>((uint8*)&integer, sizeof(uint64)));
-
-					if (entities.Ptr != null && fieldType == typeof(Entity))
-					{
-						// If we don't keep the id's of entities, convert those to ref indices in the save data
-						// entities.Ptr will only not be null, when we do not keep entity ids
-
-						bool found = false;
-						for (let i < entities.Length)
-							if (entities[i] == (Entity)integer)
-							{
-								found = true;
-
-								// Instead reference that the value is the id of the 'x'th entity we're saving
-								buffer.Append('&');
-								i.ToString(buffer);
-							}
-
-						if (!found)
-						{
-							Log.Warn("A serialized component contains a reference to an entity not included in the save. Since the save does not include exact entity ids, this field will not be serialized!");
-							return false;
-						}
-					}
-					else integer.ToString(buffer);
+					Span<uint8>((uint8*)val.DataPtr, fieldType.Size).CopyTo(Span<uint8>((uint8*)&integer, fieldType.Size));
+					integer.ToString(buffer);
 				}
 			}
 			else if (fieldType.IsFloatingPoint)
@@ -280,7 +255,7 @@ namespace Dimtoo
 					}
 					else return false; // Just don't serialize the array at all!
 
-					if (!VariantDataIsZero!(arrVal))
+					if (!includeDefault && !VariantDataIsZero!(arrVal))
 					{
 						zeroIndex = i + 1; // Next one might be
 						cutBufferLen = buffer.Length; // In that case, cut here
@@ -290,7 +265,7 @@ namespace Dimtoo
 				}
 
 				// Cut the array when all thats left is default
-				if (zeroIndex < count)
+				if (!includeDefault && zeroIndex < count)
 					buffer.RemoveFromEnd(buffer.Length - cutBufferLen);
 
 				if (buffer[buffer.Length - 2] == ',')
@@ -307,9 +282,37 @@ namespace Dimtoo
 				else
 				{
 					int64 value = 0;
-					Span<uint8>((uint8*)val.DataPtr, fieldType.Size).CopyTo(Span<uint8>((uint8*)&value, sizeof(int64)));
+					Span<uint8>((uint8*)val.DataPtr, fieldType.Size).CopyTo(Span<uint8>((uint8*)&value, fieldType.Size));
 					Enum.EnumToString(fieldType, buffer, value);
 				}
+			}
+			else if (fieldType == typeof(Entity))
+			{
+				Entity entity = .Invalid;
+				Span<uint8>((uint8*)val.DataPtr, fieldType.Size).CopyTo(Span<uint8>((uint8*)&entity, sizeof(Entity)));
+				if (entities.Ptr != null && entity != .Invalid)
+				{
+					// If we don't keep the id's of entities, convert those to ref indices in the save data
+					// entities.Ptr will only not be null, when we do not keep entity ids
+
+					bool found = false;
+					for (let i < entities.Length)
+						if (entities[i] == entity)
+						{
+							found = true;
+
+							// Instead reference that the value is the id of the 'x'th entity we're saving
+							buffer.Append('&');
+							i.ToString(buffer);
+						}
+
+					if (!found)
+					{
+						Log.Warn("A serialized component contains a reference to an entity not included in the save. Since the save does not include exact entity ids, this field will not be serialized!");
+						return false;
+					}
+				}
+				else entity.ToString(buffer);
 			}
 			else if (fieldType.IsStruct)
 			{
@@ -333,7 +336,7 @@ namespace Dimtoo
 		{
 			if (buffer.StartsWith(expect))
 				buffer.RemoveFromStart(1);
-			else LogErrorReturn!(scope $"Unexpected token: {buffer[0]}");
+			else LogErrorReturn!(scope $"Unexpected token: {buffer[0]} instead of {expect}");
 		}
 
 		static mixin EatSpace(ref StringView buffer)
@@ -402,7 +405,7 @@ namespace Dimtoo
 
 				if (uint.Parse(.(&buffer[0], numLen)) case .Ok(let val))
 				{
-					e = (uint16)val;
+					e = (Entity)val;
 					if (e >= MAX_ENTITIES)
 						LogErrorReturn!("Entity out of range");
 
@@ -554,16 +557,6 @@ namespace Dimtoo
 
 			if (fieldType.IsInteger)
 			{
-				bool isRef = false;
-				if (buffer[0] == '&')
-				{
-					if (fieldType != typeof(Entity))
-						LogErrorReturn!("References are exclusive to Entity type fields");
-
-					isRef = true;
-					buffer.RemoveFromStart(1);
-				}
-
 				var numLen = 0;
 				while (buffer.Length > numLen + 1 && buffer[numLen].IsNumber || buffer[numLen] == '-')
 					numLen++;
@@ -574,27 +567,13 @@ namespace Dimtoo
 				switch (fieldType)
 				{
 				case typeof(int8), typeof(int16), typeof(int32), typeof(int64), typeof(int):
-					Debug.Assert(!isRef);
-
 					if (int64.Parse(.(&buffer[0], numLen)) case .Ok(var num))
 						Internal.MemCpy(val.DataPtr, &num, fieldType.Size);
 					else LogErrorReturn!("Failed to parse integer");
 				default: // unsigned
-					if (!isRef)
-					{
-						if (uint64.Parse(.(&buffer[0], numLen)) case .Ok(var num))
-						{
-							// Resolve these later when we have the full list of newly created entities and their ids
-							deferResolveEntityRefs.Add(((.)num, val));
-						}	
-						else LogErrorReturn!("Failed to parse reference");
-					}
-					else
-					{
-						if (uint64.Parse(.(&buffer[0], numLen)) case .Ok(var num))
-							Internal.MemCpy(val.DataPtr, &num, fieldType.Size);
-						else LogErrorReturn!("Failed to parse integer");
-					}
+					if (uint64.Parse(.(&buffer[0], numLen)) case .Ok(var num))
+						Internal.MemCpy(val.DataPtr, &num, fieldType.Size);
+					else LogErrorReturn!("Failed to parse integer");
 				}
 
 				buffer.RemoveFromStart(numLen);
@@ -731,6 +710,43 @@ namespace Dimtoo
 						LogErrorReturn!("Failed to parse enum string");
 					}
 				}
+			}
+			else if (fieldType == typeof(Entity))
+			{
+				bool isRef = false;
+				if (buffer[0] == '&')
+				{
+					isRef = true;
+					buffer.RemoveFromStart(1);
+				}
+
+				var numLen = 0;
+				while (buffer.Length > numLen + 1 && buffer[numLen].IsNumber || buffer[numLen] == '-')
+					numLen++;
+
+				if (numLen == 0)
+					LogErrorReturn!("Expected integer literal");
+
+				if (!isRef)
+				{
+					if (uint64.Parse(.(&buffer[0], numLen)) case .Ok(let num))
+					{
+						Entity ent = (uint16)num;
+						Internal.MemCpy(val.DataPtr, &ent, sizeof(Entity));
+					}
+					else LogErrorReturn!("Failed to parse integer");
+				}
+				else
+				{
+					if (uint64.Parse(.(&buffer[0], numLen)) case .Ok(var num))
+					{
+						// Resolve these later when we have the full list of newly created entities and their ids
+						deferResolveEntityRefs.Add(((.)num, val));
+					}
+					else LogErrorReturn!("Failed to parse reference");
+				}
+
+				buffer.RemoveFromStart(numLen);
 			}
 			else if (fieldType.IsStruct)
 			{
