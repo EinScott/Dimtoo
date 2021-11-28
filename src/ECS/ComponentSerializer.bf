@@ -19,8 +19,6 @@ namespace Dimtoo
 		[Comptime]
 		public void ApplyToType(Type type)
 		{
-			// @report when typing that string, there were lots of crashes
-			
 			Compiler.EmitTypeBody(type, """
 				static this
 				{

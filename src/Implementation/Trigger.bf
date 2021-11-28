@@ -4,6 +4,8 @@ using Pile;
 
 namespace Dimtoo
 {
+	// TODO: circular triggers
+
 	[Serializable]
 	struct TriggerBodyComponent
 	{

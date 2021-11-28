@@ -27,10 +27,11 @@ namespace Dimtoo
 				res = .Bottom;
 			case .Bottom:
 				res = .Top;
-			case .All:
-				res = None;
-			case .None:
-				res = .All;
+			default:
+				// This will handle all other cases
+				// also ones like .Right|.Left, where having an inverse doesnt make *that*
+				// much sense, but it's at least somewhat expected
+				res = ~this & 0xF;
 			}
 
 			res

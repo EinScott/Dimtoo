@@ -21,6 +21,8 @@ namespace Dimtoo
 	//		-> maybe multiple pyhs update / move - cycles per update?
 	//	(or just PreCollTick and PostCollTick) or similar!
 
+	// TODO: make components substantially smaller, maybe even split them!
+
 	typealias ColliderList = SizedList<ColliderRect, const 16>;
 
 	[Serializable]
@@ -212,7 +214,10 @@ namespace Dimtoo
 			return a;
 		}
 
-		[PerfTrack,Optimize]
+		[PerfTrack]
+#if !DEBUG
+		[Optimize]
+#endif
 		public void Resolve(GridSystem gridSys)
 		{
 			for (let e in entities)
@@ -369,7 +374,9 @@ namespace Dimtoo
 			a.move += establishedMove; // Add back onto confirmed slide move to get the full movement
 		}
 
+#if !DEBUG
 		[Optimize]
+#endif
 		void CheckMove(Entity eMove, ref ResolveSet a, out CollisionInfo aInfo, GridSystem gridSys)
 		{
 			var moverPathRect = MakePathRect(a);
@@ -617,7 +624,9 @@ namespace Dimtoo
 			}
 		}
 
+#if !DEBUG		
 		[Optimize]
+#endif
 		static bool CheckRects(Rect a, Rect b, Point2 movement, out float hitPercent, out Edge hitEdge)
 		{
 			hitPercent = 0;

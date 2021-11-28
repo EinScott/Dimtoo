@@ -7,7 +7,7 @@ namespace Dimtoo
 {
 	// We want a distinction between empty/invalid entities and just, the 0th entity
 	// with indices being unaffected. So all valid entities have the Mask bit on them
-	// (and are thus serialized)
+	// (and are thus serialized) A bit of a hack though..
 	struct Entity : IHashable
 	{
 		public const Entity Invalid = default;
