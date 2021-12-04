@@ -5,15 +5,38 @@ using FastNoiseLite;
 
 namespace Dimtoo
 {
+	// TODO: make grid of uint8 -> one bit solid, other 7 flags / data!
+	// incorporate these into the tile image deciding process somehow -- optionally, either directly in the tileset file or via some function ptr
+	// OR maybe not, but still have them
+
+	// alternetively feed more TileCorner, 3x3 into the decider?
+	// -> flag system would be nicer, more possibilities
+	// -> problem with that is: how to we distribute these flags?
+	// -> do we have some flags pass when dirty? -- i mean that doesnt sound so bad! -> we just got new bounds, now check everything for tags!
+
 	[Serializable]
-	struct GridColliderComponent
+	struct Tile : uint8
+	{
+		public const Tile None = default;
+		public const Tile Solid = solidMask;
+		const uint8 solidMask = 0b1;
+
+		[Inline]
+		public bool IsSolid => (uint8)this & solidMask > 0;
+
+		[Inline]
+		public uint8 /* - more like 7 */ Flags => (uint8)this >> 1;
+	}
+
+	[Serializable]
+	struct GridComponent
 	{
 		public LayerMask layer;
 
 		public Point2 offset;
 		public UPoint2 cellSize;
-		public bool[MAX_CELL_AXIS][MAX_CELL_AXIS] cells;
-		public const int MAX_CELL_AXIS = 512;
+		public Tile[MAX_CELL_AXIS][MAX_CELL_AXIS] cells;
+		public const int MAX_CELL_AXIS = 128;
 
 		bool gridDirty;
 		Rect cellBounds;
@@ -80,7 +103,7 @@ namespace Dimtoo
 
 	class GridSystem : ComponentSystem, IRendererSystem
 	{
-		static Type[?] wantsComponents = .(typeof(TransformComponent), typeof(GridColliderComponent));
+		static Type[?] wantsComponents = .(typeof(TransformComponent), typeof(GridComponent));
 		this
 		{
 			signatureTypes = wantsComponents;
@@ -104,34 +127,35 @@ namespace Dimtoo
 			for (let e in entities)
 			{
 				let tra = componentManager.GetComponent<TransformComponent>(e);
-				let gri = componentManager.GetComponent<GridColliderComponent>(e);
+				let gri = componentManager.GetComponent<GridComponent>(e);
 				
 				let pos = tra.position.Round();
 				let bounds = gri.GetBounds(pos);
-				batch.HollowRect(bounds, 1, .Gray);
+				if (bounds.Area != 0)
+					batch.HollowRect(bounds, 1, .Gray);
 
 				let cellMin = Point2.Max(renderClip.CameraRect.Position / gri.cellSize, bounds.Position);
 				let cellMax = Point2.Min((renderClip.CameraRect.Position + renderClip.CameraRect.Size) / gri.cellSize + .One, (bounds.Position + bounds.Size));
 
 				for (var y = cellMin.Y; y < cellMax.Y; y++)
 					for (var x = cellMin.X; x < cellMax.X; x++)
-						if (gri.cells[y][x])
+						if (gri.cells[y][x].IsSolid)
 							batch.HollowRect(gri.GetCollider(x, y, pos), 1, .Red);
 			}
 		}
 
 		[Optimize]
-		public static Rect MakeGridCellBoundsRect(GridColliderComponent* grid)
+		public static Rect MakeGridCellBoundsRect(GridComponent* grid)
 		{
 			// In cell units!
 			var origin = Point2.Zero;
 			var size = Point2.Zero;
 
 			// Get grid tile bounds
-			Point2 min = .(GridColliderComponent.MAX_CELL_AXIS), max = default;
-			for (let y < GridColliderComponent.MAX_CELL_AXIS)
-				for (let x < GridColliderComponent.MAX_CELL_AXIS)
-					if (grid.cells[y][x])
+			Point2 min = .(GridComponent.MAX_CELL_AXIS), max = default;
+			for (let y < GridComponent.MAX_CELL_AXIS)
+				for (let x < GridComponent.MAX_CELL_AXIS)
+					if (grid.cells[y][x].IsSolid)
 					{
 						if (x < min.X) min.X = x;
 						if (x > max.X) max.X = x;
@@ -139,6 +163,9 @@ namespace Dimtoo
 						if (y < min.Y) min.Y = y;
 						if (y > max.Y) max.Y = y;
 					}
+
+			if (max == default && min == .(GridComponent.MAX_CELL_AXIS))
+				return .Zero;
 
 			max += .One;
 
@@ -162,7 +189,7 @@ namespace Dimtoo
 
 	class TileRenderSystem : ComponentSystem, IRendererSystem
 	{
-		static Type[?] wantsComponents = .(typeof(TileRendererComponent), typeof(GridColliderComponent), typeof(TransformComponent));
+		static Type[?] wantsComponents = .(typeof(TileRendererComponent), typeof(GridComponent), typeof(TransformComponent));
 		this
 		{
 			signatureTypes = wantsComponents;
@@ -188,7 +215,7 @@ namespace Dimtoo
 			for (let e in entities)
 			{
 				let tra = componentManager.GetComponent<TransformComponent>(e);
-				let gri = componentManager.GetComponent<GridColliderComponent>(e);
+				let gri = componentManager.GetComponent<GridComponent>(e);
 				let tir = componentManager.GetComponent<TileRendererComponent>(e);
 
 				if (tir.tileset == null)
@@ -207,13 +234,13 @@ namespace Dimtoo
 					for (var x = cellMin.X; x < cellMax.X + 1; x++)
 					{
 						TileCorner corner = .None;
-						if (x - 1 >= 0 && y - 1 >= 0 && gri.cells[y - 1][x - 1])
+						if (x - 1 >= 0 && y - 1 >= 0 && gri.cells[y - 1][x - 1].IsSolid)
 							corner |= .TopLeft;
-						if (x < GridColliderComponent.MAX_CELL_AXIS && y - 1 >= 0 && gri.cells[y - 1][x])
+						if (x < GridComponent.MAX_CELL_AXIS && y - 1 >= 0 && gri.cells[y - 1][x].IsSolid)
 							corner |= .TopRight;
-						if (x - 1 >= 0 && y < GridColliderComponent.MAX_CELL_AXIS && gri.cells[y][x - 1])
+						if (x - 1 >= 0 && y < GridComponent.MAX_CELL_AXIS && gri.cells[y][x - 1].IsSolid)
 							corner |= .BottomLeft;
-						if (x < GridColliderComponent.MAX_CELL_AXIS && y < GridColliderComponent.MAX_CELL_AXIS && gri.cells[y][x])
+						if (x < GridComponent.MAX_CELL_AXIS && y < GridComponent.MAX_CELL_AXIS && gri.cells[y][x].IsSolid)
 							corner |= .BottomRight;
 
 						mixin GetVariation(int variationCount)

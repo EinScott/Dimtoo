@@ -9,10 +9,10 @@ namespace Dimtoo
 	[Serializable]
 	struct TriggerBodyComponent
 	{
-		public SizedList<TriggerRect, const 16> triggers;
+		public SizedList<TriggerRect, const 4> triggers;
 
-		public SizedList<TriggerCollisionInfo, const 16> overlaps;
-		public SizedList<TriggerCollisionInfo, const 16> prevOverlaps;
+		public SizedList<TriggerCollisionInfo, const 8> overlaps;
+		public SizedList<TriggerCollisionInfo, const 8> prevOverlaps;
 
 		public SizedList<TriggerCollisionInfo, const 8> newOverlaps;
 
@@ -41,7 +41,7 @@ namespace Dimtoo
 	[Serializable]
 	struct TriggerOverlapFeedbackComponent
 	{
-		public SizedList<TriggerCollisionInfo, const 16> overlaps;
+		public SizedList<TriggerCollisionInfo, const 8> overlaps;
 		public SizedList<TriggerCollisionInfo, const 8> newOverlaps;
 	}
 

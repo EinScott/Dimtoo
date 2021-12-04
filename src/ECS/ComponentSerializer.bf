@@ -193,7 +193,8 @@ namespace Dimtoo
 
 			if (fieldType.IsPointer || fieldType.IsObject && !fieldType is SizedArrayType)
 				return false; // Don't serialize objects or pointers
-			else if (fieldType.IsInteger)
+			else if (fieldType.IsInteger ||
+				fieldType.IsTypedPrimitive && fieldType.UnderlyingType.IsInteger)
 			{
 				switch (fieldType)
 				{
@@ -207,7 +208,8 @@ namespace Dimtoo
 					integer.ToString(buffer);
 				}
 			}
-			else if (fieldType.IsFloatingPoint)
+			else if (fieldType.IsFloatingPoint
+				|| fieldType.IsTypedPrimitive && fieldType.UnderlyingType.IsFloatingPoint)
 			{
 				switch (fieldType)
 				{
@@ -247,7 +249,7 @@ namespace Dimtoo
 
 					if (SerializeValue(ref arrVal, buffer, entities, includeDefault, true))
 					{
-						if (!arrType.IsPrimitive)
+						if (!(arrType.IsPrimitive || arrType.IsTypedPrimitive))
 							buffer.Append(",\n");
 						else buffer.Append(", "); // Just put primitives in one line!
 					}
@@ -323,7 +325,7 @@ namespace Dimtoo
 			}
 			else
 			{
-				Log.Debug($"Couldn't serialize field: {fieldType.GetName(.. scope .())}");
+				Log.Debug($"Couldn't serialize field of type {fieldType.GetName(.. scope .())}");
 				return false;
 			}
 
@@ -553,7 +555,8 @@ namespace Dimtoo
 		{
 			Type fieldType = val.VariantType;
 
-			if (fieldType.IsInteger)
+			if (fieldType.IsInteger
+				|| fieldType.IsTypedPrimitive && fieldType.UnderlyingType.IsInteger)
 			{
 				var numLen = 0;
 				while (buffer.Length > numLen + 1 && buffer[numLen].IsNumber || buffer[numLen] == '-')
@@ -576,7 +579,8 @@ namespace Dimtoo
 
 				buffer.RemoveFromStart(numLen);
 			}
-			else if (fieldType.IsFloatingPoint)
+			else if (fieldType.IsFloatingPoint
+				|| fieldType.IsTypedPrimitive && fieldType.UnderlyingType.IsFloatingPoint)
 			{
 				var numLen = 0;
 				while (buffer.Length > numLen + 1 && buffer[numLen].IsNumber || buffer[numLen] == '.' || buffer[numLen] == '-')

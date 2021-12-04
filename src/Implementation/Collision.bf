@@ -7,9 +7,6 @@ namespace Dimtoo
 {
 	// Unconventional 2d collision detection & response
 
-	// TODO: replace these for outer loops with stuff that loads the loop body as a anon function off to a threadpool?
-	// -> at least test if thats faster
-
 	// !! if we have a contact in the direction we're currently moving in, even if we dont trigger a collision (due to rounding / floats),
 	//    always report one, cause that makes more sense
 
@@ -21,9 +18,7 @@ namespace Dimtoo
 	//		-> maybe multiple pyhs update / move - cycles per update?
 	//	(or just PreCollTick and PostCollTick) or similar!
 
-	// TODO: make components substantially smaller, maybe even split them!
-
-	typealias ColliderList = SizedList<ColliderRect, const 16>;
+	typealias ColliderList = SizedList<ColliderRect, const 4>;
 
 	[Serializable]
 	struct CollisionBodyComponent
@@ -113,7 +108,7 @@ namespace Dimtoo
 	[Serializable]
 	struct CollisionReceiveFeedbackComponent
 	{
-		public SizedList<CollisionInfo, const 16> collisions;
+		public SizedList<CollisionInfo, const 8> collisions;
 
 		[Inline]
 		public bool Occured() => collisions.Count > 0;
@@ -519,7 +514,7 @@ namespace Dimtoo
 					if (eMove == eOther)
 						continue; // b is not a!
 	
-					let bGri = componentManager.GetComponent<GridColliderComponent>(eOther);
+					let bGri = componentManager.GetComponent<GridComponent>(eOther);
 					let bTra = componentManager.GetComponent<TransformComponent>(eOther);
 					
 					let bPos = bTra.position.Round();
@@ -539,7 +534,7 @@ namespace Dimtoo
 								let aRect = Rect(a.pos + aColl.rect.Position, aColl.rect.Size);
 								for (var y = cellMin.Y; y < cellMax.Y; y++)
 									for (var x = cellMin.X; x < cellMax.X; x++)
-										if (bGri.cells[y][x])
+										if (bGri.cells[y][x].IsSolid)
 										{
 #if DEBUG
 											bool dbgColliderEntered = false;
@@ -570,7 +565,7 @@ namespace Dimtoo
 	
 														other = eOther,
 														otherWasMoving = false,
-														otherColliderIndex = GridColliderComponent.GetGridIndex(x, y),
+														otherColliderIndex = GridComponent.GetGridIndex(x, y),
 														otherDir = .Zero,
 														otherColliderType = .Grid
 													};
@@ -582,7 +577,7 @@ namespace Dimtoo
 														{
 															iWasMoving = false,
 															myHitEdge = newHitEdge.Inverse,
-															myColliderIndex = GridColliderComponent.GetGridIndex(x, y),
+															myColliderIndex = GridComponent.GetGridIndex(x, y),
 															myDir = .Zero,
 	
 															other = eMove,
