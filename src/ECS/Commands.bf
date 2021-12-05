@@ -6,7 +6,7 @@ namespace Pile
 {
 	extension Commands
 	{
-		static Scene sceneFocus;
+		public static Scene sceneFocus;
 
 		static mixin CheckFocus()
 		{
@@ -25,7 +25,7 @@ namespace Pile
 			let save = scope String();
 			sceneFocus.SerializeScene(save);
 
-			let path = Path.InternalCombine(.. scope .(System.DataPath.Length + 16), System.DataPath, "saves");
+			let path = Path.InternalCombine(.. scope .(System.UserPath.Length + 16), System.UserPath, "saves");
 
 			if (!Directory.Exists(path))
 				Directory.CreateDirectory(path);
@@ -54,7 +54,7 @@ namespace Pile
 			let save = scope String();
 			sceneFocus.SerializeScene(save);
 
-			let path = Path.InternalCombine(.. scope .(System.DataPath.Length + 16), System.DataPath, "saves");
+			let path = Path.InternalCombine(.. scope .(System.UserPath.Length + 16), System.UserPath, "saves");
 
 			if (!Directory.Exists(path))
 				Directory.CreateDirectory(path);
@@ -73,7 +73,7 @@ namespace Pile
 		public static void SceneListSaves()
 		{
 			let list = scope String("Scene save files: ");
-			for (let file in Directory.EnumerateFiles(Path.InternalCombine(.. scope .(System.DataPath.Length + 16), System.DataPath, "saves")))
+			for (let file in Directory.EnumerateFiles(Path.InternalCombine(.. scope .(System.UserPath.Length + 16), System.UserPath, "saves")))
 			{
 				file.GetFileName(list);
 				list.Append(", ");
@@ -90,7 +90,43 @@ namespace Pile
 		{
 			CheckFocus!();
 
-			// TODO:
+			let path = Path.InternalCombine(.. scope .(System.UserPath.Length + 16), System.UserPath, "saves");
+
+			if (!Directory.Exists(path))
+			{
+				Log.Error("No saves found");
+				return;
+			}
+
+			path..Append(Path.DirectorySeparatorChar).Append(name);
+			if (!path.EndsWith(".dscene"))
+				path.Append(".dscene");
+
+			let save = scope String();
+			if (File.ReadAllText(path, save) case .Err)
+			{
+				Log.Error("Error reading save file");
+				return;
+			}
+
+			sceneFocus.DeserializeScene(save);
+		}
+
+		[Description("Toggles the editor, if there is one")]
+		public static void Editor()
+		{
+			String currentScene = null;
+			if (sceneFocus != null)
+				sceneFocus.SerializeScene(currentScene = scope:: .());
+
+			if (Core.Game is Editor)
+				Core.SwapGame(Core.Config.createGame());
+			else
+			{
+				if (Editor.createCustomEditor != null)
+					Core.SwapGame(Editor.createCustomEditor(currentScene));
+				else Log.Error("Editor.createCustomEditor function not set!");
+			}
 		}
 	}
 }

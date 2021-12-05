@@ -583,7 +583,7 @@ namespace Dimtoo
 				|| fieldType.IsTypedPrimitive && fieldType.UnderlyingType.IsFloatingPoint)
 			{
 				var numLen = 0;
-				while (buffer.Length > numLen + 1 && buffer[numLen].IsNumber || buffer[numLen] == '.' || buffer[numLen] == '-')
+				while (buffer.Length > numLen + 1 && buffer[numLen].IsNumber || buffer[numLen] == '.' || buffer[numLen] == '-' || buffer[numLen] == 'e')
 					numLen++;
 
 				if (numLen == 0)
