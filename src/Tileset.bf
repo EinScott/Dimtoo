@@ -68,7 +68,7 @@ namespace Dimtoo
 
 				// Put combination in tiles lookup
 				tiles.Add(((uint16)tup.corner + ((uint16)variation << 8)),
-					Tile(Rect(tup.tileOffset, TileSize)));
+					Tile(Rect((.)tup.tileOffset, (.)TileSize)));
 			}
 
 			for (let tup in animSpan)

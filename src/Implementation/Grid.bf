@@ -5,14 +5,15 @@ using FastNoiseLite;
 
 namespace Dimtoo
 {
-	// TODO: make grid of uint8 -> one bit solid, other 7 flags / data!
-	// incorporate these into the tile image deciding process somehow -- optionally, either directly in the tileset file or via some function ptr
+	// TODO: incorporate tile flags into the tile image deciding process somehow -- optionally, either directly in the tileset file or via some function ptr
 	// OR maybe not, but still have them
-
 	// alternetively feed more TileCorner, 3x3 into the decider?
 	// -> flag system would be nicer, more possibilities
 	// -> problem with that is: how to we distribute these flags?
 	// -> do we have some flags pass when dirty? -- i mean that doesnt sound so bad! -> we just got new bounds, now check everything for tags!
+	// -> have a propagation system with "newFlags? func(TilePos (like .Top, .TopLeft), newFlags)" and if a adjacent tile to a change decides to change, call its adjacent funcs too
+	//    ... in the hopes that it eventually stops? i dunno about that, it kind of screams stack overflow / infinite loop.
+	// -> what did old pile do again?
 
 	[Serializable]
 	struct Tile : uint8
@@ -129,7 +130,7 @@ namespace Dimtoo
 				let tra = componentManager.GetComponent<TransformComponent>(e);
 				let gri = componentManager.GetComponent<GridComponent>(e);
 				
-				let pos = tra.position.Round();
+				let pos = tra.position.ToRounded();
 				let bounds = gri.GetBounds(pos);
 				if (bounds.Area != 0)
 					batch.HollowRect(bounds, 1, .Gray);
@@ -176,7 +177,7 @@ namespace Dimtoo
 		}
 	}
 
-	//[Serializable]
+	[Serializable]
 	struct TileRendererComponent
 	{
 		public Asset<Tileset> tileset;
@@ -218,10 +219,10 @@ namespace Dimtoo
 				let gri = componentManager.GetComponent<GridComponent>(e);
 				let tir = componentManager.GetComponent<TileRendererComponent>(e);
 
-				if (tir.tileset == null)
+				if (tir.tileset.Asset == null)
 					continue;
 
-				let pos = tra.position.Round();
+				let pos = tra.position.ToRounded();
 				let bounds = gri.GetBounds(pos);
 
 				let cellMin = Point2.Max(renderClip.CameraRect.Position / gri.cellSize, bounds.Position);

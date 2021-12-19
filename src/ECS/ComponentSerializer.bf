@@ -5,6 +5,8 @@ using System.Diagnostics;
 using Pile;
 using System.Reflection;
 
+using internal Dimtoo;
+
 namespace Dimtoo
 {
 	// NOSERIALIZE attribute?
@@ -32,7 +34,7 @@ namespace Dimtoo
 		}
 	}
 
-	class ComponentSerializer
+	static class ComponentSerializer
 	{
 		public static Dictionary<String, Type> serializableStructs = new .() ~ DeleteDictionaryAndKeys!(_);
 
@@ -64,7 +66,7 @@ namespace Dimtoo
 				buffer.RemoveFromEnd(2);
 		}
 
-		public void SerializeScene(Scene scene, String buffer, bool exactEntity = true, bool includeDefault = false)
+		public static void SerializeScene(Scene scene, String buffer, bool exactEntity = true, bool includeDefault = false)
 		{
 			buffer.Append("[\n");
 
@@ -93,7 +95,7 @@ namespace Dimtoo
 			buffer.Append("\n]");
 		}
 
-		public void SerializeGroup(Scene scene, Entity[] entities, String buffer, bool exactEntity = true, bool includeDefault = false)
+		public static void SerializeGroup(Scene scene, Entity[] entities, String buffer, bool exactEntity = true, bool includeDefault = false)
 		{
 			buffer.Append("[\n");
 
@@ -111,7 +113,7 @@ namespace Dimtoo
 			buffer.Append("\n]");
 		}
 
-		void SerializeEntity(Scene scene, Entity e, String buffer, Span<Entity> entities, bool exactEntity, bool includeDefault)
+		static void SerializeEntity(Scene scene, Entity e, String buffer, Span<Entity> entities, bool exactEntity, bool includeDefault)
 		{
 			if (exactEntity)
 				buffer.Append(scope $"{e}: [\n");
@@ -134,12 +136,13 @@ namespace Dimtoo
 			buffer.Append("\n]");
 		}
 
-		bool SerializeStruct(Type structType, Variant structVal, String buffer, Span<Entity> entities, bool includeDefault)
+		static bool SerializeStruct(Type structType, Variant structVal, String buffer, Span<Entity> entities, bool includeDefault)
 		{
 			var structVal;
 			Debug.Assert(structType.IsStruct);
 
-			if (!structType.HasCustomAttribute<SerializableAttribute>())
+			// All relevant pile types have reflection forced in build settings of Dimtoo, so don't check them here! (unless they obviously have no reflection info -> fieldCount)
+			if ((!structType.GetFullName(.. scope .()).StartsWith("Pile.") || structType.FieldCount == 0) && structType.FieldCount == 0 && !structType.HasCustomAttribute<SerializableAttribute>())
 			{
 				Log.Debug(scope $"Struct {structType} is not marked as [Serializable] and will not be included");
 				return false;
@@ -187,7 +190,7 @@ namespace Dimtoo
 			return true;
 		}
 
-		bool SerializeValue(ref Variant val, String buffer, Span<Entity> entities, bool includeDefault, bool smallBool = false)
+		static bool SerializeValue(ref Variant val, String buffer, Span<Entity> entities, bool includeDefault, bool smallBool = false)
 		{
 			Type fieldType = val.VariantType;
 
@@ -314,14 +317,32 @@ namespace Dimtoo
 				}
 				else entity.ToString(buffer);
 			}
+			else if (let t = fieldType as SpecializedGenericType && t.UnspecializedType == typeof(Asset<>))
+			{
+				// Just put our const string in here... not the best of solutions, but still..
+
+				if (fieldType.GetField("name") case .Ok(let nameField))
+				{
+					Variant nameVal = Variant.CreateReference(nameField.FieldType, ((uint8*)val.DataPtr) + nameField.MemberOffset);
+					let nameString = nameVal.Get<String>();
+
+					if (nameString == null)
+					{
+						// no need to serialize, value is default
+						return false;
+					}
+
+					String.QuoteString(&nameString[0], nameString.Length, buffer);
+				}
+				else
+				{
+					Log.Warn("Couldn't serialize asset");
+					return false;
+				}
+			}
 			else if (fieldType.IsStruct)
 			{
-				var structType = fieldType;
-
-				if (ConvertFakeTypes(ref structType))
-					val.[Friend]mStructType = ((int)Internal.UnsafeCastToPtr(structType) & ~3) + + (val.[Friend]mStructType & 3); // Put fake type into variant for further use with reflection
-
-				return SerializeStruct(structType, val, buffer, entities, includeDefault);
+				return SerializeStruct(fieldType, val, buffer, entities, includeDefault);
 			}
 			else
 			{
@@ -351,7 +372,7 @@ namespace Dimtoo
 			buffer.RemoveFromStart(i);
 		}
 
-		public Result<void> Deserialize(Scene scene, StringView buffer)
+		public static Result<void> Deserialize(Scene scene, StringView buffer)
 		{
 			var buffer;
 			EatSpace!(ref buffer);
@@ -392,7 +413,7 @@ namespace Dimtoo
 			return .Ok;
 		}
 
-		Result<void> DeserializeEntity(Scene scene, ref StringView buffer, List<Entity> deserializedEntities, List<(int indexRef, Variant value)> deferResolveEntityRefs)
+		static Result<void> DeserializeEntity(Scene scene, ref StringView buffer, List<Entity> deserializedEntities, List<(int indexRef, Variant value)> deferResolveEntityRefs)
 		{
 			EatSpace!(ref buffer);
 
@@ -448,7 +469,7 @@ namespace Dimtoo
 				EatSpace!(ref buffer);
 				if (!buffer.StartsWith("{}"))
 				{
-					Try!(DeserializeStructBody(componentType, structMemory, ref buffer, deferResolveEntityRefs));
+					Try!(DeserializeStructBody(scene, componentType, structMemory, ref buffer, deferResolveEntityRefs));
 				}
 				else buffer.RemoveFromStart(2); // just empty brackets, nothing to do
 
@@ -463,7 +484,7 @@ namespace Dimtoo
 			return .Ok;
 		}
 
-		Result<void> DeserializeComponentType(out Type structType, ref StringView buffer)
+		static Result<void> DeserializeComponentType(out Type structType, ref StringView buffer)
 		{
 			EatSpace!(ref buffer);
 
@@ -501,7 +522,7 @@ namespace Dimtoo
 			return .Ok;
 		}
 
-		Result<void> DeserializeStructBody(Type structType, Span<uint8> structTargetMem, ref StringView buffer, List<(int indexRef, Variant value)> deferResolveEntityRefs)
+		static Result<void> DeserializeStructBody(Scene scene, Type structType, Span<uint8> structTargetMem, ref StringView buffer, List<(int indexRef, Variant value)> deferResolveEntityRefs)
 		{
 			ForceEat!('{', ref buffer);
 
@@ -538,7 +559,7 @@ namespace Dimtoo
 
 				Variant fieldVal = Variant.CreateReference(fieldInfo.FieldType, ((uint8*)structVal.DataPtr) + fieldInfo.MemberOffset);
 
-				Try!(DeserializeValue(ref fieldVal, ref buffer, deferResolveEntityRefs));
+				Try!(DeserializeValue(scene, ref fieldVal, ref buffer, deferResolveEntityRefs));
 
 				EatSpace!(ref buffer);
 
@@ -551,7 +572,7 @@ namespace Dimtoo
 			return .Ok;
 		}
 
-		Result<void> DeserializeValue(ref Variant val, ref StringView buffer, List<(int indexRef, Variant value)> deferResolveEntityRefs)
+		static Result<void> DeserializeValue(Scene scene, ref Variant val, ref StringView buffer, List<(int indexRef, Variant value)> deferResolveEntityRefs)
 		{
 			Type fieldType = val.VariantType;
 
@@ -649,7 +670,7 @@ namespace Dimtoo
 						LogErrorReturn!("Too many elements given in array");
 
 					var arrVal = Variant.CreateReference(arrType, ptr);
-					Try!(DeserializeValue(ref arrVal, ref buffer, deferResolveEntityRefs));
+					Try!(DeserializeValue(scene, ref arrVal, ref buffer, deferResolveEntityRefs));
 
 					ptr += arrType.Size;
 					i++;
@@ -750,64 +771,64 @@ namespace Dimtoo
 
 				buffer.RemoveFromStart(numLen);
 			}
+			else if (let t = fieldType as SpecializedGenericType && t.UnspecializedType == typeof(Asset<>))
+			{
+				if (fieldType.GetField("name") case .Ok(let nameField))
+				{
+					Variant nameVal = Variant.CreateReference(nameField.FieldType, ((uint8*)val.DataPtr) + nameField.MemberOffset);
+
+					if (buffer[0] != '"')
+						LogErrorReturn!("Asset notation must start with '\"'");
+
+					int endIdx = -1;
+					bool isEscape = false;
+					for (let c in buffer[1...])
+					{
+						if (c == '"' && !isEscape)
+						{
+							endIdx = @c.Index;
+							break;
+						}	
+
+						if (c == '\\')
+							isEscape = true;
+						else isEscape = false;
+					}
+					if (endIdx == -1)
+						LogErrorReturn!("Unterminated string in asset notation");
+
+					var nameStr = String.UnQuoteString(&buffer[0], endIdx + 2, .. scope .());
+					if (scene.managedStrings.Contains(nameStr))
+					{
+						Debug.Assert(!scene.managedStrings.TryAdd(nameStr, let existantStr));
+
+						nameStr = *existantStr;
+					}
+					else
+					{
+						// Allocate new one, doesnt currently exist!
+						nameStr = scene.managedStrings.Add(.. new .(nameStr));
+					}
+
+					// Copy pointer
+					Internal.MemCpy(nameVal.DataPtr, &nameStr, sizeof(int));
+
+					// TODO: would be nice to properly call constructor!
+
+					buffer.RemoveFromStart(endIdx + 2);
+				}
+				else
+				{
+					LogErrorReturn!("Couldn't deserialize asset");
+				}
+			}
 			else if (fieldType.IsStruct)
 			{
-				var structType = fieldType;
-				ConvertFakeTypes(ref structType);
-
-				Try!(DeserializeStructBody(structType, .((uint8*)val.DataPtr, fieldType.Size), ref buffer, deferResolveEntityRefs));
+				Try!(DeserializeStructBody(scene, fieldType, .((uint8*)val.DataPtr, fieldType.Size), ref buffer, deferResolveEntityRefs));
 			}
 			else LogErrorReturn!("Cannot handle value");
 
 			return .Ok;
-		}
-
-		// FAKE PILE TYPES WITH REFLECTION INFO
-
-		bool ConvertFakeTypes(ref Type checkType)
-		{
-			// Fake reflection info for pile types
-			switch (checkType)
-			{
-			case typeof(Pile.Rect):
-				checkType = typeof(Rect);
-			case typeof(Pile.Vector2):
-				checkType = typeof(Vector2);
-			case typeof(Pile.Point2):
-				checkType = typeof(Point2);
-			case typeof(Pile.UPoint2):
-				checkType = typeof(UPoint2);
-			default:
-				return false;
-			}
-			return true;
-		}
-
-		[Serializable]
-		struct Rect
-		{
-			public int X;
-			public int Y;
-			public int Width;
-			public int Height;
-		}
-
-		[Serializable]
-		struct Vector2
-		{
-			public float X, Y;
-		}
-
-		[Serializable]
-		struct Point2
-		{
-			public int X, Y;
-		}
-
-		[Serializable]
-		struct UPoint2
-		{
-			public uint X, Y;
 		}
 	}
 }

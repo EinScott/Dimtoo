@@ -172,7 +172,7 @@ namespace Dimtoo
 				batch.HollowRect(MakePathRect(PrepareResolveSet(tra, cob, ?)), 1, .Gray);
 
 				for (let coll in cob.colliders)
-					batch.HollowRect(.(tra.position.Round() + coll.rect.Position, coll.rect.Size), 1, .Red);
+					batch.HollowRect(.(tra.position.ToRounded() + coll.rect.Position, coll.rect.Size), 1, .Red);
 			}
 
 #if DEBUG
@@ -188,13 +188,18 @@ namespace Dimtoo
 			// We move in whole pixels only, so prepare for that here!
 			ResolveSet a;
 			a.coll = body.colliders;
-			a.pos = tra.position.Round();
-			a.move = body.move.Round();
+			a.pos = tra.position.ToRounded();
+			a.move = body.move.ToRounded();
 
 			var posRemainder = (tra.position - a.pos) + (body.move - a.move);
+
+			// TODO: DO THIS in RESOLVE
+			// limit the resulting posremainder to below absolute 0.5 to not suddenly round in the other dir!
+			// on collision, put value on colliding axes to 0.5 - epsilon in the direction of collision so that
+			// any further movement in that direction will result in another collision event!
 			if (Math.Round(Math.Abs(posRemainder.X)) >= 1 || Math.Round(Math.Abs(posRemainder.Y)) >= 1)
 			{
-				let rounded = posRemainder.Round();
+				let rounded = posRemainder.ToRounded();
 				a.move += rounded;
 				posRemainder -= rounded;
 			}
@@ -204,7 +209,7 @@ namespace Dimtoo
 
 			// The position of the entity doesnt change by this, the float remainder would just move the entity in this case
 			// and thus we move that onto the movement amount.
-			Debug.Assert(newPos.Round() == tra.position.Round());
+			Debug.Assert(newPos.ToRounded() == tra.position.ToRounded());
 
 			return a;
 		}
@@ -459,12 +464,12 @@ namespace Dimtoo
 											iWasMoving = true,
 											myHitEdge = newHitEdge,
 											myColliderIndex = @aColl.[Inline]Index,
-											myDir = ((Vector2)a.move).Normalize(),
+											myDir = ((Vector2)a.move).ToNormalized(),
 
 											other = eOther,
 											otherWasMoving = otherMoving,
 											otherColliderIndex = @bColl.[Inline]Index,
-											otherDir = ((Vector2)b.move).Normalize(),
+											otherDir = ((Vector2)b.move).ToNormalized(),
 											otherColliderType = .Rect
 										};
 
@@ -476,17 +481,17 @@ namespace Dimtoo
 												iWasMoving = otherMoving,
 												myHitEdge = newHitEdge.Inverse,
 												myColliderIndex = @bColl.[Inline]Index,
-												myDir = ((Vector2)b.move).Normalize(),
+												myDir = ((Vector2)b.move).ToNormalized(),
 
 												other = eMove,
 												otherWasMoving = true,
 												otherColliderIndex = @aColl.[Inline]Index,
-												otherDir = ((Vector2)a.move).Normalize(),
+												otherDir = ((Vector2)a.move).ToNormalized(),
 												otherColliderType = .Rect
 											};
 									}
 									
-									a.move = ((Vector2)a.move * hitPercent).Round();
+									a.move = ((Vector2)a.move * hitPercent).ToRounded();
 
 									moveChanged = true;
 								}
@@ -517,7 +522,7 @@ namespace Dimtoo
 					let bGri = componentManager.GetComponent<GridComponent>(eOther);
 					let bTra = componentManager.GetComponent<TransformComponent>(eOther);
 					
-					let bPos = bTra.position.Round();
+					let bPos = bTra.position.ToRounded();
 					let checkRect = bGri.GetBounds(bPos);
 	
 					if (moverPathRect.Overlaps(checkRect))
@@ -561,7 +566,7 @@ namespace Dimtoo
 														iWasMoving = true,
 														myHitEdge = newHitEdge,
 														myColliderIndex = @aColl.[Inline]Index,
-														myDir = ((Vector2)a.move).Normalize(),
+														myDir = ((Vector2)a.move).ToNormalized(),
 	
 														other = eOther,
 														otherWasMoving = false,
@@ -583,12 +588,12 @@ namespace Dimtoo
 															other = eMove,
 															otherWasMoving = true,
 															otherColliderIndex = @aColl.[Inline]Index,
-															otherDir = ((Vector2)a.move).Normalize(),
+															otherDir = ((Vector2)a.move).ToNormalized(),
 															otherColliderType = .Rect
 														};
 												}
 												
-												a.move = ((Vector2)a.move * hitPercent).Round();
+												a.move = ((Vector2)a.move * hitPercent).ToRounded();
 
 												moveChanged = true;
 											}

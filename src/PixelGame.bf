@@ -83,7 +83,7 @@ namespace Dimtoo
 		    // Make position relative to frame buffer origin
 		    let framePos = (Vector2)windowPosition / renderScale;
 
-		    return framePos.Round();
+		    return framePos.ToRounded();
 		}
 
 		public Point2 FrameToWindow(Point2 framePosition)
@@ -96,7 +96,7 @@ namespace Dimtoo
 			// Take into account Frame to Window Origin offset
 			windowPos += frameOffset;
 
-			return windowPos.Round();
+			return windowPos.ToRounded();
 		}
 	}
 }

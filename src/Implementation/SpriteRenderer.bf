@@ -1,10 +1,10 @@
 using System;
 using System.Diagnostics;
 using Pile;
-using Atma;
 
 namespace Dimtoo
 {
+	[Serializable]
 	struct SpriteRendererComponent
 	{
 		public int frame;
@@ -40,7 +40,7 @@ namespace Dimtoo
 				let spr = componentManager.GetComponent<SpriteRendererComponent>(e);
 				let tra = componentManager.GetComponent<TransformComponent>(e);
 
-				spr.sprite.Asset.Draw(batch, spr.frame, tra.position.Round(), tra.scale, tra.rotation);
+				spr.sprite.Asset.Draw(batch, spr.frame, tra.position.ToRounded(), tra.scale, tra.rotation);
 			}
 		}
 	}

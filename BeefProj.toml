@@ -3,3 +3,9 @@ Dependencies = {corlib = "*", Pile = "*", FastNoiseLite = "*"}
 
 [Project]
 Name = "Dimtoo"
+
+[[Configs.Debug.Win64.DistinctOptions]]
+Filter = "Pile.Asset<>;Pile.Vector2;Pile.Vector3;Pile.Vector4;Pile.Point2;Pile.Point3;Pile.Point4;Pile.UPoint2;Pile.Rect;Pile.Quaternion;Pile.Matrix3x2;Pile.Matrix4x4;Pile.Color"
+ReflectAlwaysInclude = "IncludeAll"
+ReflectNonStaticFields = true
+ReflectConstructors = true

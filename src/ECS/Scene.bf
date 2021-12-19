@@ -43,43 +43,47 @@ namespace Dimtoo
 
 	class Scene
 	{
+		protected internal HashSet<String> managedStrings = new .() ~ DeleteContainerAndItems!(_);
+
 		protected readonly SystemManager sysMan = new .() ~ delete _;
 		protected readonly ComponentManager compMan = new .() ~ delete _;
 		protected readonly EntityManager entMan = new .() ~ delete _;
-
-		protected readonly ComponentSerializer serializer = new .() ~ delete _;
 
 		public void Clear()
 		{
 			entMan.ClearEntities();
 			sysMan.ClearSystemEntities();
 			compMan.ClearData();
+
+			for (let s in managedStrings)
+				delete s;
+			managedStrings.Clear();
 		}
 
 		[Inline]
-		public void SerializeScene(String buffer, bool includeDefault = false) => serializer.SerializeScene(this, buffer, true, includeDefault);
+		public void SerializeScene(String buffer, bool includeDefault = false) => ComponentSerializer.SerializeScene(this, buffer, true, includeDefault);
 
 		[Inline]
-		public void SerializeSceneAsGroup(String buffer, bool includeDefault = false) => serializer.SerializeScene(this, buffer, false, includeDefault);
+		public void SerializeSceneAsGroup(String buffer, bool includeDefault = false) => ComponentSerializer.SerializeScene(this, buffer, false, includeDefault);
 
 		[Inline]
 		public bool DeserializeScene(StringView saveString)
 		{
 			Clear();
-			return serializer.Deserialize(this, saveString) case .Ok;
+			return ComponentSerializer.Deserialize(this, saveString) case .Ok;
 		}
 
 		[Inline]
-		public void SerializeGroup(Entity single, String buffer, bool includeDefault = false) => serializer.SerializeGroup(this, scope Entity[1](single), buffer, false, includeDefault);
+		public void SerializeGroup(Entity single, String buffer, bool includeDefault = false) => ComponentSerializer.SerializeGroup(this, scope Entity[1](single), buffer, false, includeDefault);
 
 		[Inline]
-		public void SerializeGroup(String buffer, params Entity[] entities) => serializer.SerializeGroup(this, entities, buffer, false, false);
+		public void SerializeGroup(String buffer, params Entity[] entities) => ComponentSerializer.SerializeGroup(this, entities, buffer, false, false);
 
 		[Inline]
-		public void SerializeGroup(String buffer, bool includeDefault, params Entity[] entities) => serializer.SerializeGroup(this, entities, buffer, false, includeDefault);
+		public void SerializeGroup(String buffer, bool includeDefault, params Entity[] entities) => ComponentSerializer.SerializeGroup(this, entities, buffer, false, includeDefault);
 
 		[Inline]
-		public bool CreateFromGroup(StringView saveString) => serializer.Deserialize(this, saveString) case .Ok;
+		public bool CreateFromGroup(StringView saveString) => ComponentSerializer.Deserialize(this, saveString) case .Ok;
 
 		[Inline]
 		public Entity CreateEntity() => entMan.CreateEntity();
