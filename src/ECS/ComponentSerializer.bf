@@ -9,12 +9,6 @@ using internal Dimtoo;
 
 namespace Dimtoo
 {
-	// NOSERIALIZE attribute?
-	// CUSTOMSERIALIZE attribute? -> call some function to fill in the type fully after the base deserialize! -> for things that need assets?
-	// STRINGS???
-
-	// TODO: when deserializing, option to put all the created entities into a list/span!
-
 	[AttributeUsage(.Struct|.Enum, .AlwaysIncludeTarget | .ReflectAttribute, ReflectUser = .AllMembers, AlwaysIncludeUser = .IncludeAllMethods | .AssumeInstantiated)]
 	struct SerializableAttribute : Attribute, IComptimeTypeApply
 	{
@@ -33,6 +27,9 @@ namespace Dimtoo
 				""");
 		}
 	}
+
+	[AttributeUsage(.Field, .ReflectAttribute)]
+	struct NoSerializeAttribute : Attribute {}
 
 	static class ComponentSerializer
 	{
@@ -152,7 +149,9 @@ namespace Dimtoo
 
 			for (let m in structType.GetFields(.Public|.Instance))
 			{
-				if ((m.FieldType.IsEnum && m.FieldType.IsUnion) || m.FieldType.IsPointer || m.FieldType.IsObject && !m.FieldType is SizedArrayType)
+				// TODO: unions!
+				if ((m.FieldType.IsEnum && m.FieldType.IsUnion) || m.FieldType.IsPointer || m.FieldType.IsObject && !m.FieldType is SizedArrayType && m.FieldType != typeof(String)
+					|| m.GetCustomAttribute<NoSerializeAttribute>() case .Ok) // If field has NoSerialize, skip!
 					continue;
 
 				Variant val = Variant.CreateReference(m.FieldType, ((uint8*)structVal.DataPtr) + m.MemberOffset);
@@ -194,7 +193,7 @@ namespace Dimtoo
 		{
 			Type fieldType = val.VariantType;
 
-			if (fieldType.IsPointer || fieldType.IsObject && !fieldType is SizedArrayType)
+			if (fieldType.IsPointer || fieldType.IsObject && !fieldType is SizedArrayType && fieldType != typeof(String))
 				return false; // Don't serialize objects or pointers
 			else if (fieldType.IsInteger ||
 				fieldType.IsTypedPrimitive && fieldType.UnderlyingType.IsInteger)
@@ -289,6 +288,29 @@ namespace Dimtoo
 					Enum.EnumToString(fieldType, buffer, value);
 				}
 			}
+			else if (fieldType == typeof(String)
+				|| fieldType == typeof(StringView))
+			{
+				String nameString;
+				if (fieldType == typeof(StringView))
+				{
+					let view = val.Get<StringView>();
+
+					if (view.Ptr == null)
+						return false;
+
+					nameString = scope:: .(view);
+				}
+				else
+				{
+					nameString = val.Get<String>();
+
+					if (nameString == null) // no need to serialize, value is default
+						return false;
+				}
+
+				String.QuoteString(&nameString[0], nameString.Length, buffer);
+			}
 			else if (fieldType == typeof(Entity))
 			{
 				Entity entity = .Invalid;
@@ -319,20 +341,11 @@ namespace Dimtoo
 			}
 			else if (let t = fieldType as SpecializedGenericType && t.UnspecializedType == typeof(Asset<>))
 			{
-				// Just put our const string in here... not the best of solutions, but still..
-
 				if (fieldType.GetField("name") case .Ok(let nameField))
 				{
+					// Just serialize the name as the whole asset.. other stuff is just internal runtime info!
 					Variant nameVal = Variant.CreateReference(nameField.FieldType, ((uint8*)val.DataPtr) + nameField.MemberOffset);
-					let nameString = nameVal.Get<String>();
-
-					if (nameString == null)
-					{
-						// no need to serialize, value is default
-						return false;
-					}
-
-					String.QuoteString(&nameString[0], nameString.Length, buffer);
+					return SerializeValue(ref nameVal, buffer, entities, includeDefault, smallBool);
 				}
 				else
 				{
@@ -372,7 +385,7 @@ namespace Dimtoo
 			buffer.RemoveFromStart(i);
 		}
 
-		public static Result<void> Deserialize(Scene scene, StringView buffer)
+		public static Result<void> Deserialize(Scene scene, StringView buffer, List<Entity> createdEntities = null)
 		{
 			var buffer;
 			EatSpace!(ref buffer);
@@ -399,6 +412,7 @@ namespace Dimtoo
 
 			ForceEat!(']', ref buffer);
 
+			// Only added to when we have entity refs!
 			if (deferResolveEntityRefs.Count > 0)
 			{
 				// This list should be filled with at least something, since clearly values were read
@@ -409,6 +423,9 @@ namespace Dimtoo
 				for (var set in deferResolveEntityRefs)
 					*((Entity*)set.value.DataPtr) = deserializedEntities[set.indexRef];
 			}
+
+			if (createdEntities != null)
+				createdEntities.AddRange(deserializedEntities);
 
 			return .Ok;
 		}
@@ -445,10 +462,9 @@ namespace Dimtoo
 			{
 				// Just take any available entity
 				e = scene.CreateEntity();
-
-				// We will only need these in the case where we don't store exact entity ids
-				deserializedEntities.Add(e);
 			}
+
+			deserializedEntities.Add(e);
 
 			ForceEat!('[', ref buffer);
 
@@ -734,6 +750,58 @@ namespace Dimtoo
 					}
 				}
 			}
+			else if (fieldType == typeof(String)
+				|| fieldType == typeof(StringView))
+			{
+				if (buffer[0] != '"')
+					LogErrorReturn!("String must start with '\"'");
+
+				// Find terminating "
+				int endIdx = -1;
+				bool isEscape = false;
+				for (let c in buffer[1...])
+				{
+					if (c == '"' && !isEscape)
+					{
+						endIdx = @c.Index;
+						break;
+					}	
+
+					if (c == '\\')
+						isEscape = true;
+					else isEscape = false;
+				}
+				if (endIdx == -1)
+					LogErrorReturn!("Unterminated string in asset notation");
+
+				// Manage string!
+				var nameStr = String.UnQuoteString(&buffer[0], endIdx + 2, .. scope .());
+				if (scene.managedStrings.Contains(nameStr))
+				{
+					Debug.Assert(!scene.managedStrings.TryAdd(nameStr, let existantStr));
+
+					nameStr = *existantStr;
+				}
+				else
+				{
+					// Allocate new one, doesnt currently exist!
+					nameStr = scene.managedStrings.Add(.. new .(nameStr));
+				}
+
+				if (fieldType == typeof(StringView))
+				{
+					// Make and copy stringView
+					var strVal = (StringView)nameStr;
+					Internal.MemCpy(val.DataPtr, &strVal, sizeof(StringView));
+				}
+				else
+				{
+					// Copy pointer to string
+					Internal.MemCpy(val.DataPtr, &nameStr, sizeof(int));
+				}
+
+				buffer.RemoveFromStart(endIdx + 2);
+			}
 			else if (fieldType == typeof(Entity))
 			{
 				bool isRef = false;
@@ -777,50 +845,12 @@ namespace Dimtoo
 				{
 					Variant nameVal = Variant.CreateReference(nameField.FieldType, ((uint8*)val.DataPtr) + nameField.MemberOffset);
 
-					if (buffer[0] != '"')
-						LogErrorReturn!("Asset notation must start with '\"'");
+					// TODO: would be nice to properly call constructor?
 
-					int endIdx = -1;
-					bool isEscape = false;
-					for (let c in buffer[1...])
-					{
-						if (c == '"' && !isEscape)
-						{
-							endIdx = @c.Index;
-							break;
-						}	
-
-						if (c == '\\')
-							isEscape = true;
-						else isEscape = false;
-					}
-					if (endIdx == -1)
-						LogErrorReturn!("Unterminated string in asset notation");
-
-					var nameStr = String.UnQuoteString(&buffer[0], endIdx + 2, .. scope .());
-					if (scene.managedStrings.Contains(nameStr))
-					{
-						Debug.Assert(!scene.managedStrings.TryAdd(nameStr, let existantStr));
-
-						nameStr = *existantStr;
-					}
-					else
-					{
-						// Allocate new one, doesnt currently exist!
-						nameStr = scene.managedStrings.Add(.. new .(nameStr));
-					}
-
-					// Copy pointer
-					Internal.MemCpy(nameVal.DataPtr, &nameStr, sizeof(int));
-
-					// TODO: would be nice to properly call constructor!
-
-					buffer.RemoveFromStart(endIdx + 2);
+					// Fill in name field!
+					return DeserializeValue(scene, ref nameVal, ref buffer, deferResolveEntityRefs);
 				}
-				else
-				{
-					LogErrorReturn!("Couldn't deserialize asset");
-				}
+				else LogErrorReturn!("Couldn't deserialize asset");
 			}
 			else if (fieldType.IsStruct)
 			{

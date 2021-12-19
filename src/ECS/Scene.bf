@@ -83,7 +83,7 @@ namespace Dimtoo
 		public void SerializeGroup(String buffer, bool includeDefault, params Entity[] entities) => ComponentSerializer.SerializeGroup(this, entities, buffer, false, includeDefault);
 
 		[Inline]
-		public bool CreateFromGroup(StringView saveString) => ComponentSerializer.Deserialize(this, saveString) case .Ok;
+		public bool CreateFromGroup(StringView saveString, List<Entity> createdEntities = null) => ComponentSerializer.Deserialize(this, saveString, createdEntities) case .Ok;
 
 		[Inline]
 		public Entity CreateEntity() => entMan.CreateEntity();
