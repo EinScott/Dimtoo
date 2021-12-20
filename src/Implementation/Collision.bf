@@ -169,7 +169,7 @@ namespace Dimtoo
 				if (cob.move != .Zero)
 					batch.Line(tra.position, tra.position + cob.move, 1, .Magenta);
 
-				batch.HollowRect(MakePathRect(PrepareResolveSet(tra, cob, ?)), 1, .Gray);
+				batch.HollowRect(MakePathRect(PrepareResolveSet(tra, cob)), 1, .Gray);
 
 				for (let coll in cob.colliders)
 					batch.HollowRect(.(tra.position.ToRounded() + coll.rect.Position, coll.rect.Size), 1, .Red);
@@ -183,33 +183,13 @@ namespace Dimtoo
 
 		typealias ResolveSet = (ColliderList coll, Point2 move, Point2 pos);
 
-		static ResolveSet PrepareResolveSet(TransformComponent* tra, CollisionBodyComponent* body, out Vector2 newPos)
+		static ResolveSet PrepareResolveSet(TransformComponent* tra, CollisionBodyComponent* body)
 		{
 			// We move in whole pixels only, so prepare for that here!
 			ResolveSet a;
 			a.coll = body.colliders;
 			a.pos = tra.position.ToRounded();
 			a.move = body.move.ToRounded();
-
-			var posRemainder = (tra.position - a.pos) + (body.move - a.move);
-
-			// TODO: DO THIS in RESOLVE
-			// limit the resulting posremainder to below absolute 0.5 to not suddenly round in the other dir!
-			// on collision, put value on colliding axes to 0.5 - epsilon in the direction of collision so that
-			// any further movement in that direction will result in another collision event!
-			if (Math.Round(Math.Abs(posRemainder.X)) >= 1 || Math.Round(Math.Abs(posRemainder.Y)) >= 1)
-			{
-				let rounded = posRemainder.ToRounded();
-				a.move += rounded;
-				posRemainder -= rounded;
-			}
-
-			// Update position remainder
-			newPos = a.pos + posRemainder;
-
-			// The position of the entity doesnt change by this, the float remainder would just move the entity in this case
-			// and thus we move that onto the movement amount.
-			Debug.Assert(newPos.ToRounded() == tra.position.ToRounded());
 
 			return a;
 		}
@@ -233,12 +213,33 @@ namespace Dimtoo
 				let aCob = componentManager.GetComponent<CollisionBodyComponent>(e);
 				let aTra = componentManager.GetComponent<TransformComponent>(e);
 
-				// Make the resolve set for a, also manage a's remainder position when deciding integer position and movement
-				var a = PrepareResolveSet(aTra, aCob, out aTra.position); // Put this into our transform to process sub-pixel movements
+				var a = PrepareResolveSet(aTra, aCob);
+				var posRemainder = (aTra.position - a.pos) + (aCob.move - a.move);
 				aCob.move = .Zero;
 
+				if (Math.Round(Math.Abs(posRemainder.X)) >= 1 || Math.Round(Math.Abs(posRemainder.Y)) >= 1)
+				{
+					let rounded = posRemainder.ToRounded();
+					a.move += rounded;
+					posRemainder -= rounded;
+
+					// Guarantees we dont have a value of (0.5 - 1) in here (which would round the other way)
+					posRemainder = Vector2.Clamp(posRemainder, .(-0.49f), .(0.49f));
+				}
+
+				// The position of the entity doesnt change by this, the float remainder would just move the entity in this case
+				// and thus we move that onto the movement amount.
+				Debug.Assert((a.pos + posRemainder).ToRounded() == aTra.position.ToRounded());
+
 				if (a.move == .Zero)
+				{
+					// Update pos to record subpixel moves
+					aTra.position = a.pos + posRemainder;
+
 					continue; // a must move!
+				}
+
+				let aPos = a.pos; // a.pos will be modified for further checks, so record it here
 
 				// Move info
 				Point2 currMove = a.move;
@@ -350,8 +351,21 @@ namespace Dimtoo
 					collFeedback.slideCollision = slideInfo;
 				}
 
+				// Based on where we collide, adjust posRemainder to move as close to it as possible. This ensures two things:
+				// - when we move back into a collision we immediately collide again (as would be logical)
+				// - when we move through remainder rounding but cant, we don't theoretically move back due to the remainder getting inverted
+				let hitEdges = moveInfo.myHitEdge | slideInfo.myHitEdge;
+				if ((hitEdges & .Left) > 0)
+					posRemainder.X = -0.49f;
+				else if ((hitEdges & .Right) > 0)
+					posRemainder.X = 0.49f;
+				if ((hitEdges & .Top) > 0)
+					posRemainder.Y = -0.49f;
+				else if ((hitEdges & .Bottom) > 0)
+					posRemainder.Y = 0.49f;
+
 				// Actually move
-				aTra.position += a.move;
+				aTra.position = aPos + a.move + posRemainder;
 			}
 
 #if DEBUG
@@ -394,7 +408,7 @@ namespace Dimtoo
 				let bCob = componentManager.GetComponent<CollisionBodyComponent>(eOther);
 				let bTra = componentManager.GetComponent<TransformComponent>(eOther);
 
-				let b = PrepareResolveSet(bTra, bCob, ?);
+				let b = PrepareResolveSet(bTra, bCob);
 				let checkPathRect = MakePathRect(b);
 
 				// If they overlap the moveRect

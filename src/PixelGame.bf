@@ -68,6 +68,11 @@ namespace Dimtoo
 			Resized();
 		}
 
+		protected override void Shutdown()
+		{
+			System.Window.OnResized.Remove(scope => Resized, true);
+		}
+
 		protected void RenderFrame(Batch2D batch)
 		{
 			batch.Image(frame, frameOffset, Vector2(renderScale, renderScale), .Zero, 0, .White);
