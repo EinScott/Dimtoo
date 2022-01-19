@@ -30,7 +30,7 @@ namespace Dimtoo
 	}
 
 	[Serializable]
-	struct GridComponent
+	struct Grid
 	{
 		public LayerMask layer;
 
@@ -104,7 +104,7 @@ namespace Dimtoo
 
 	class GridSystem : ComponentSystem, IRendererSystem
 	{
-		static Type[?] wantsComponents = .(typeof(TransformComponent), typeof(GridComponent));
+		static Type[?] wantsComponents = .(typeof(Transform), typeof(Grid));
 		this
 		{
 			signatureTypes = wantsComponents;
@@ -127,8 +127,8 @@ namespace Dimtoo
 
 			for (let e in entities)
 			{
-				let tra = componentManager.GetComponent<TransformComponent>(e);
-				let gri = componentManager.GetComponent<GridComponent>(e);
+				let tra = componentManager.GetComponent<Transform>(e);
+				let gri = componentManager.GetComponent<Grid>(e);
 				
 				let pos = tra.position.ToRounded();
 				let bounds = gri.GetBounds(pos);
@@ -146,16 +146,16 @@ namespace Dimtoo
 		}
 
 		[Optimize]
-		public static Rect MakeGridCellBoundsRect(GridComponent* grid)
+		public static Rect MakeGridCellBoundsRect(Grid* grid)
 		{
 			// In cell units!
 			var origin = Point2.Zero;
 			var size = Point2.Zero;
 
 			// Get grid tile bounds
-			Point2 min = .(GridComponent.MAX_CELL_AXIS), max = default;
-			for (let y < GridComponent.MAX_CELL_AXIS)
-				for (let x < GridComponent.MAX_CELL_AXIS)
+			Point2 min = .(Grid.MAX_CELL_AXIS), max = default;
+			for (let y < Grid.MAX_CELL_AXIS)
+				for (let x < Grid.MAX_CELL_AXIS)
 					if (grid.cells[y][x].IsSolid)
 					{
 						if (x < min.X) min.X = x;
@@ -165,7 +165,7 @@ namespace Dimtoo
 						if (y > max.Y) max.Y = y;
 					}
 
-			if (max == default && min == .(GridComponent.MAX_CELL_AXIS))
+			if (max == default && min == .(Grid.MAX_CELL_AXIS))
 				return .Zero;
 
 			max += .One;
@@ -178,7 +178,7 @@ namespace Dimtoo
 	}
 
 	[Serializable]
-	struct TileRendererComponent
+	struct TileRenderer
 	{
 		public Asset<Tileset> tileset;
 
@@ -190,7 +190,7 @@ namespace Dimtoo
 
 	class TileRenderSystem : ComponentSystem, IRendererSystem
 	{
-		static Type[?] wantsComponents = .(typeof(TileRendererComponent), typeof(GridComponent), typeof(TransformComponent));
+		static Type[?] wantsComponents = .(typeof(TileRenderer), typeof(Grid), typeof(Transform));
 		this
 		{
 			signatureTypes = wantsComponents;
@@ -215,9 +215,9 @@ namespace Dimtoo
 		{
 			for (let e in entities)
 			{
-				let tra = componentManager.GetComponent<TransformComponent>(e);
-				let gri = componentManager.GetComponent<GridComponent>(e);
-				let tir = componentManager.GetComponent<TileRendererComponent>(e);
+				let tra = componentManager.GetComponent<Transform>(e);
+				let gri = componentManager.GetComponent<Grid>(e);
+				let tir = componentManager.GetComponent<TileRenderer>(e);
 
 				if (tir.tileset.Asset == null)
 					continue;
@@ -237,11 +237,11 @@ namespace Dimtoo
 						TileCorner corner = .None;
 						if (x - 1 >= 0 && y - 1 >= 0 && gri.cells[y - 1][x - 1].IsSolid)
 							corner |= .TopLeft;
-						if (x < GridComponent.MAX_CELL_AXIS && y - 1 >= 0 && gri.cells[y - 1][x].IsSolid)
+						if (x < Grid.MAX_CELL_AXIS && y - 1 >= 0 && gri.cells[y - 1][x].IsSolid)
 							corner |= .TopRight;
-						if (x - 1 >= 0 && y < GridComponent.MAX_CELL_AXIS && gri.cells[y][x - 1].IsSolid)
+						if (x - 1 >= 0 && y < Grid.MAX_CELL_AXIS && gri.cells[y][x - 1].IsSolid)
 							corner |= .BottomLeft;
-						if (x < GridComponent.MAX_CELL_AXIS && y < GridComponent.MAX_CELL_AXIS && gri.cells[y][x].IsSolid)
+						if (x < Grid.MAX_CELL_AXIS && y < Grid.MAX_CELL_AXIS && gri.cells[y][x].IsSolid)
 							corner |= .BottomRight;
 
 						mixin GetVariation(int variationCount)

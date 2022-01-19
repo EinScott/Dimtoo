@@ -3,7 +3,7 @@ using Pile;
 namespace Dimtoo
 {
 	[Serializable]
-	struct TransformComponent
+	struct Transform
 	{
 		public Vector2 position;
 		public Vector2 scale;

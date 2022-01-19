@@ -3,7 +3,7 @@ using Pile;
 
 namespace Dimtoo
 {
-	struct PathfinderComponent
+	struct Pathfinder
 	{
 		public Entity referenceGrid;
 		public Point2 startPoint;
@@ -14,9 +14,10 @@ namespace Dimtoo
 		// HOW THE HELL DO WE STORE A PATH?
 		// maybe just a limited/gradual generation?
 		// -> could we even.. or would that require more space?
+		// -> pooled seperate allocation of full path, just ref it here!
 	}
 
-	struct PathfinderObstacleComponent
+	struct PathfinderObstacle
 	{
 		// On everything that has this, we detect if it has a collisionBody or grid
 		// then work with that

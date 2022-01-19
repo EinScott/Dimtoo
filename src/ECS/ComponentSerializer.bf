@@ -139,7 +139,7 @@ namespace Dimtoo
 			Debug.Assert(structType.IsStruct);
 
 			// All relevant pile types have reflection forced in build settings of Dimtoo, so don't check them here! (unless they obviously have no reflection info -> fieldCount)
-			if ((!structType.GetFullName(.. scope .()).StartsWith("Pile.") || structType.FieldCount == 0) && structType.FieldCount == 0 && !structType.HasCustomAttribute<SerializableAttribute>())
+			if ((!structType.GetFullName(.. scope .()).StartsWith("Pile.") || structType.FieldCount == 0) && !structType.HasCustomAttribute<SerializableAttribute>())
 			{
 				Log.Debug(scope $"Struct {structType} is not marked as [Serializable] and will not be included");
 				return false;

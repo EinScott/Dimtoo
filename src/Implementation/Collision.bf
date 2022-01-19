@@ -21,7 +21,7 @@ namespace Dimtoo
 	typealias ColliderList = SizedList<ColliderRect, const 4>;
 
 	[Serializable]
-	struct CollisionBodyComponent
+	struct CollisionBody
 	{
 		public Vector2 move;
 		public ColliderList colliders;
@@ -92,7 +92,7 @@ namespace Dimtoo
 
 	// Feedback of a body's own movement collision "it collides into something else"
 	[Serializable]
-	struct CollisionMoveFeedbackComponent
+	struct CollisionMoveFeedback
 	{
 		public CollisionInfo moveCollision;
 		public CollisionInfo slideCollision;
@@ -106,7 +106,7 @@ namespace Dimtoo
 
 	// Feedback of a body's received collision "something else collides into it"
 	[Serializable]
-	struct CollisionReceiveFeedbackComponent
+	struct CollisionReceiveFeedback
 	{
 		public SizedList<CollisionInfo, const 8> collisions;
 
@@ -145,7 +145,7 @@ namespace Dimtoo
 		List<Rect> dbgLastMoveCheckedRects = new List<Rect>() ~ delete _;
 #endif
 
-		static Type[?] wantsComponents = .(typeof(TransformComponent), typeof(CollisionBodyComponent));
+		static Type[?] wantsComponents = .(typeof(Transform), typeof(CollisionBody));
 		this
 		{
 			signatureTypes = wantsComponents;
@@ -163,8 +163,8 @@ namespace Dimtoo
 
 			for (let e in entities)
 			{
-				let tra = componentManager.GetComponent<TransformComponent>(e);
-				let cob = componentManager.GetComponent<CollisionBodyComponent>(e);
+				let tra = componentManager.GetComponent<Transform>(e);
+				let cob = componentManager.GetComponent<CollisionBody>(e);
 
 				if (cob.move != .Zero)
 					batch.Line(tra.position, tra.position + cob.move, 1, .Magenta);
@@ -183,7 +183,7 @@ namespace Dimtoo
 
 		typealias ResolveSet = (ColliderList coll, Point2 move, Point2 pos);
 
-		static ResolveSet PrepareResolveSet(TransformComponent* tra, CollisionBodyComponent* body)
+		static ResolveSet PrepareResolveSet(Transform* tra, CollisionBody* body)
 		{
 			// We move in whole pixels only, so prepare for that here!
 			ResolveSet a;
@@ -201,7 +201,7 @@ namespace Dimtoo
 		public void Resolve(GridSystem gridSys)
 		{
 			for (let e in entities)
-				if (componentManager.GetComponentOptional<CollisionReceiveFeedbackComponent>(e, let feedback))
+				if (componentManager.GetComponentOptional<CollisionReceiveFeedback>(e, let feedback))
 					feedback.collisions.Clear();
 
 #if DEBUG
@@ -210,8 +210,8 @@ namespace Dimtoo
 
 			for (let e in entities)
 			{
-				let aCob = componentManager.GetComponent<CollisionBodyComponent>(e);
-				let aTra = componentManager.GetComponent<TransformComponent>(e);
+				let aCob = componentManager.GetComponent<CollisionBody>(e);
+				let aTra = componentManager.GetComponent<Transform>(e);
 
 				var a = PrepareResolveSet(aTra, aCob);
 				var posRemainder = (aTra.position - a.pos) + (aCob.move - a.move);
@@ -345,14 +345,14 @@ namespace Dimtoo
 					}
 				}
 
-				if (componentManager.GetComponentOptional<CollisionMoveFeedbackComponent>(e, let collFeedback))
+				if (componentManager.GetComponentOptional<CollisionMoveFeedback>(e, let collFeedback))
 				{
 					collFeedback.moveCollision = moveInfo;
 					collFeedback.slideCollision = slideInfo;
 				}
 
 				// Based on where we collide, adjust posRemainder to move as close to it as possible. This ensures two things:
-				// - when we move back into a collision we immediately collide again (as would be logical)
+				// - when we move back into a collision we immediately collide again (as would be logical)										(this is still kind of a TODO)
 				// - when we move through remainder rounding but cant, we don't theoretically move back due to the remainder getting inverted
 				let hitEdges = moveInfo.myHitEdge | slideInfo.myHitEdge;
 				if ((hitEdges & .Left) > 0)
@@ -405,8 +405,8 @@ namespace Dimtoo
 				if (eMove == eOther)
 					continue; // b is not a!
 
-				let bCob = componentManager.GetComponent<CollisionBodyComponent>(eOther);
-				let bTra = componentManager.GetComponent<TransformComponent>(eOther);
+				let bCob = componentManager.GetComponent<CollisionBody>(eOther);
+				let bTra = componentManager.GetComponent<Transform>(eOther);
 
 				let b = PrepareResolveSet(bTra, bCob);
 				let checkPathRect = MakePathRect(b);
@@ -487,7 +487,7 @@ namespace Dimtoo
 											otherColliderType = .Rect
 										};
 
-									if (componentManager.GetComponentOptional<CollisionReceiveFeedbackComponent>(eOther, ?))
+									if (componentManager.GetComponentOptional<CollisionReceiveFeedback>(eOther, ?))
 									{
 										eHit = eOther;
 										bInfo = .()
@@ -533,8 +533,8 @@ namespace Dimtoo
 					if (eMove == eOther)
 						continue; // b is not a!
 	
-					let bGri = componentManager.GetComponent<GridComponent>(eOther);
-					let bTra = componentManager.GetComponent<TransformComponent>(eOther);
+					let bGri = componentManager.GetComponent<Grid>(eOther);
+					let bTra = componentManager.GetComponent<Transform>(eOther);
 					
 					let bPos = bTra.position.ToRounded();
 					let checkRect = bGri.GetBounds(bPos);
@@ -584,19 +584,19 @@ namespace Dimtoo
 	
 														other = eOther,
 														otherWasMoving = false,
-														otherColliderIndex = GridComponent.GetGridIndex(x, y),
+														otherColliderIndex = Grid.GetGridIndex(x, y),
 														otherDir = .Zero,
 														otherColliderType = .Grid
 													};
 	
-												if (componentManager.GetComponentOptional<CollisionReceiveFeedbackComponent>(eOther, ?))
+												if (componentManager.GetComponentOptional<CollisionReceiveFeedback>(eOther, ?))
 												{
 													eHit = eOther;
 													bInfo = .()
 														{
 															iWasMoving = false,
 															myHitEdge = newHitEdge.Inverse,
-															myColliderIndex = GridComponent.GetGridIndex(x, y),
+															myColliderIndex = Grid.GetGridIndex(x, y),
 															myDir = .Zero,
 	
 															other = eMove,
@@ -633,7 +633,7 @@ namespace Dimtoo
 			if (eHit != 0)
 			{
 				// Since this was set, we know this exists on the entity
-				let feedback = componentManager.GetComponent<CollisionReceiveFeedbackComponent>(eHit);
+				let feedback = componentManager.GetComponent<CollisionReceiveFeedback>(eHit);
 				feedback.collisions.Add(bInfo);
 			}
 		}
