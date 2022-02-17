@@ -55,6 +55,7 @@ namespace Dimtoo
 			val = mask;
 		}
 
+		[BonInclude]
 		uint64 val;
 
 		public bool this[int layer]

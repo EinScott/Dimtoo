@@ -8,7 +8,10 @@ namespace Dimtoo
 	[BonTarget]
 	struct SizedList<T, Size> : IEnumerable<T> where Size : const int
 	{
+		// TODO: could integrate this
+		[BonInclude]
 		int count;
+		[BonInclude]
 		T[Size] arr;
 
 		[Inline]
