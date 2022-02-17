@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using Pile;
 using FastNoiseLite;
+using Bon;
 
 namespace Dimtoo
 {
@@ -15,7 +16,7 @@ namespace Dimtoo
 	//    ... in the hopes that it eventually stops? i dunno about that, it kind of screams stack overflow / infinite loop.
 	// -> what did old pile do again?
 
-	[Serializable]
+	[BonTarget]
 	struct Tile : uint8
 	{
 		public const Tile None = default;
@@ -29,7 +30,7 @@ namespace Dimtoo
 		public uint8 /* - more like 7 */ Flags => (uint8)this >> 1;
 	}
 
-	[Serializable]
+	[BonTarget,BonPolyRegister]
 	struct Grid
 	{
 		public LayerMask layer;
@@ -39,7 +40,9 @@ namespace Dimtoo
 		public Tile[MAX_CELL_AXIS][MAX_CELL_AXIS] cells;
 		public const int MAX_CELL_AXIS = 128;
 
+		[BonInclude]
 		bool gridDirty;
+		[BonInclude]
 		Rect cellBounds;
 
 		public this(UPoint2 cellSize, LayerMask layer = 0x1)
@@ -177,7 +180,7 @@ namespace Dimtoo
 		}
 	}
 
-	[Serializable]
+	[BonTarget,BonPolyRegister]
 	struct TileRenderer
 	{
 		public Asset<Tileset> tileset;

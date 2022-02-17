@@ -2,12 +2,14 @@ using System;
 using System.Collections;
 using System.Diagnostics;
 using Pile;
+using Bon;
 
 namespace Dimtoo
 {
 	// We want a distinction between empty/invalid entities and just, the 0th entity
 	// with indices being unaffected. So all valid entities have the Mask bit on them
 	// (and are thus serialized) A bit of a hack though..
+	[BonTarget]
 	struct Entity : IHashable
 	{
 		public const Entity Invalid = default;
@@ -43,11 +45,13 @@ namespace Dimtoo
 
 	class Scene
 	{
-		protected internal HashSet<String> managedStrings = new .() ~ DeleteContainerAndItems!(_);
+		protected internal List<String> managedStrings = new .() ~ DeleteContainerAndItems!(_);
 
 		protected readonly SystemManager sysMan = new .() ~ delete _;
 		protected readonly ComponentManager compMan = new .() ~ delete _;
 		protected readonly EntityManager entMan = new .() ~ delete _;
+
+		protected readonly ComponentSerializer s = new .(this) ~ delete _;
 
 		public void Clear()
 		{
@@ -61,29 +65,29 @@ namespace Dimtoo
 		}
 
 		[Inline]
-		public void SerializeScene(String buffer, bool includeDefault = false) => ComponentSerializer.SerializeScene(this, buffer, true, includeDefault);
+		public void SerializeScene(String buffer, bool includeDefault = false) => s.SerializeScene(buffer, true, includeDefault);
 
 		[Inline]
-		public void SerializeSceneAsGroup(String buffer, bool includeDefault = false) => ComponentSerializer.SerializeScene(this, buffer, false, includeDefault);
+		public void SerializeSceneAsGroup(String buffer, bool includeDefault = false) => s.SerializeScene(buffer, false, includeDefault);
 
 		[Inline]
 		public bool DeserializeScene(StringView saveString)
 		{
 			Clear();
-			return ComponentSerializer.Deserialize(this, saveString) case .Ok;
+			return s.Deserialize(saveString) case .Ok;
 		}
 
 		[Inline]
-		public void SerializeGroup(Entity single, String buffer, bool includeDefault = false) => ComponentSerializer.SerializeGroup(this, scope Entity[1](single), buffer, false, includeDefault);
+		public void SerializeGroup(Entity single, String buffer, bool includeDefault = false) => s.SerializeGroup(scope Entity[1](single), buffer, false, includeDefault);
 
 		[Inline]
-		public void SerializeGroup(String buffer, params Entity[] entities) => ComponentSerializer.SerializeGroup(this, entities, buffer, false, false);
+		public void SerializeGroup(String buffer, params Entity[] entities) => s.SerializeGroup(entities, buffer, false, false);
 
 		[Inline]
-		public void SerializeGroup(String buffer, bool includeDefault, params Entity[] entities) => ComponentSerializer.SerializeGroup(this, entities, buffer, false, includeDefault);
+		public void SerializeGroup(String buffer, bool includeDefault, params Entity[] entities) => s.SerializeGroup(entities, buffer, false, includeDefault);
 
 		[Inline]
-		public bool CreateFromGroup(StringView saveString, List<Entity> createdEntities = null) => ComponentSerializer.Deserialize(this, saveString, createdEntities) case .Ok;
+		public bool CreateFromGroup(StringView saveString, List<Entity> createdEntities = null) => s.Deserialize(saveString, createdEntities) case .Ok;
 
 		[Inline]
 		public Entity CreateEntity() => entMan.CreateEntity();

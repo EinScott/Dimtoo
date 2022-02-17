@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using Pile;
 using System.Collections;
+using Bon;
 
 namespace Dimtoo
 {
@@ -20,7 +21,7 @@ namespace Dimtoo
 
 	typealias ColliderList = SizedList<ColliderRect, const 4>;
 
-	[Serializable]
+	[BonTarget,BonPolyRegister]
 	struct CollisionBody
 	{
 		public Vector2 move;
@@ -39,14 +40,14 @@ namespace Dimtoo
 		}
 	}
 
-	[Serializable]
+	[BonTarget]
 	enum ColliderType
 	{
 		Rect,
 		Grid
 	}
 
-	[Serializable]
+	[BonTarget]
 	struct LayerMask
 	{
 		public this(uint64 mask = 0x1)
@@ -75,7 +76,7 @@ namespace Dimtoo
 		}
 	}
 
-	[Serializable]
+	[BonTarget]
 	struct ColliderRect
 	{
 		public this(Rect rect, Edge solid = .All, LayerMask layer = 0x1)
@@ -91,7 +92,7 @@ namespace Dimtoo
 	}
 
 	// Feedback of a body's own movement collision "it collides into something else"
-	[Serializable]
+	[BonTarget,BonPolyRegister]
 	struct CollisionMoveFeedback
 	{
 		public CollisionInfo moveCollision;
@@ -105,7 +106,7 @@ namespace Dimtoo
 	}
 
 	// Feedback of a body's received collision "something else collides into it"
-	[Serializable]
+	[BonTarget,BonPolyRegister]
 	struct CollisionReceiveFeedback
 	{
 		public SizedList<CollisionInfo, const 8> collisions;
@@ -123,7 +124,7 @@ namespace Dimtoo
 		}
 	}
 
-	[Serializable]
+	[BonTarget]
 	struct CollisionInfo
 	{
 		public Entity other;

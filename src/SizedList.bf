@@ -1,10 +1,11 @@
 using System;
 using System.Collections;
 using System.Diagnostics;
+using Bon;
 
 namespace Dimtoo
 {
-	[Serializable]
+	[BonTarget]
 	struct SizedList<T, Size> : IEnumerable<T> where Size : const int
 	{
 		int count;

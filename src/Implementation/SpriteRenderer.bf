@@ -1,10 +1,11 @@
 using System;
 using System.Diagnostics;
 using Pile;
+using Bon;
 
 namespace Dimtoo
 {
-	[Serializable]
+	[BonTarget,BonPolyRegister]
 	struct SpriteRenderer
 	{
 		public int frame;

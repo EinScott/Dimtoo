@@ -1,8 +1,9 @@
 using Pile;
+using Bon;
 
 namespace Dimtoo
 {
-	[Serializable]
+	[BonTarget,BonPolyRegister]
 	struct Transform
 	{
 		public Vector2 position;

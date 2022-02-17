@@ -1,9 +1,10 @@
 using System;
 using Pile;
+using Bon;
 
 namespace Dimtoo
 {
-	[Serializable]
+	[BonTarget]
 	enum Edge : uint8
 	{
 		case Top = 1;

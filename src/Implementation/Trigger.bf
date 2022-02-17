@@ -1,12 +1,13 @@
 using System;
 using System.Diagnostics;
 using Pile;
+using Bon;
 
 namespace Dimtoo
 {
 	// TODO: circular triggers
 
-	[Serializable]
+	[BonTarget,BonPolyRegister]
 	struct TriggerBody
 	{
 		public SizedList<TriggerRect, const 4> triggers;
@@ -25,7 +26,7 @@ namespace Dimtoo
 		}
 	}
 
-	[Serializable]
+	[BonTarget]
 	struct TriggerRect
 	{
 		public this(Rect rect, LayerMask layer = 0x1)
@@ -38,14 +39,14 @@ namespace Dimtoo
 		public LayerMask layer;
 	}
 
-	[Serializable]
+	[BonTarget,BonPolyRegister]
 	struct TriggerOverlapFeedback
 	{
 		public SizedList<TriggerCollisionInfo, const 8> overlaps;
 		public SizedList<TriggerCollisionInfo, const 8> newOverlaps;
 	}
 
-	[Serializable]
+	[BonTarget]
 	struct TriggerCollisionInfo
 	{
 		public Entity other;
