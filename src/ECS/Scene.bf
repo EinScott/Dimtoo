@@ -65,10 +65,10 @@ namespace Dimtoo
 		}
 
 		[Inline]
-		public void SerializeScene(String buffer, bool includeDefault = false) => s.SerializeScene(buffer, true, includeDefault);
+		public void SerializeScene(String buffer) => s.SerializeScene(buffer, true);
 
 		[Inline]
-		public void SerializeSceneAsGroup(String buffer, bool includeDefault = false) => s.SerializeScene(buffer, false, includeDefault);
+		public void SerializeSceneAsGroup(String buffer) => s.SerializeScene(buffer, false);
 
 		[Inline]
 		public bool DeserializeScene(StringView saveString)
@@ -78,13 +78,10 @@ namespace Dimtoo
 		}
 
 		[Inline]
-		public void SerializeGroup(Entity single, String buffer, bool includeDefault = false) => s.SerializeGroup(scope Entity[1](single), buffer, false, includeDefault);
+		public void SerializeGroup(Entity single, String buffer) => s.SerializeGroup(scope Entity[1](single), buffer, false);
 
 		[Inline]
-		public void SerializeGroup(String buffer, params Entity[] entities) => s.SerializeGroup(entities, buffer, false, false);
-
-		[Inline]
-		public void SerializeGroup(String buffer, bool includeDefault, params Entity[] entities) => s.SerializeGroup(entities, buffer, false, includeDefault);
+		public void SerializeGroup(String buffer, params Entity[] entities) => s.SerializeGroup(entities, buffer, false);
 
 		[Inline]
 		public bool CreateFromGroup(StringView saveString, List<Entity> createdEntities = null) => s.Deserialize(saveString, createdEntities) case .Ok;

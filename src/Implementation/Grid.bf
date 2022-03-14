@@ -16,6 +16,15 @@ namespace Dimtoo
 	//    ... in the hopes that it eventually stops? i dunno about that, it kind of screams stack overflow / infinite loop.
 	// -> what did old pile do again?
 
+	// make a combination of auto tiling and considering flags when picking a tile!
+	// -> flags for different tile types (when selecting edge sprite, just take that into account! - possibly make an enum to help!)
+	// -> auto tiling for changing flags based on sourrounding tiles (and return if adjacent need to be updated)
+
+	// maybe we shouldn't use transform for grids? or at least something in addition - or just grid component
+	// -> in any case, it shouldn't be freely movable with that component (maybe TransformTile or something)
+	// -> that allows us there to query the nearby tiled grids if something happens on the edged, and update them
+	//    if existant -- works, it it worth it / simpler solution?
+
 	[BonTarget]
 	struct Tile : uint8
 	{
@@ -68,6 +77,15 @@ namespace Dimtoo
 			}
 
 			return Rect(cellBounds.Position * cellSize + pos + offset, cellBounds.Size * cellSize);
+		}
+
+		public (Point2 cellMin, Point2 cellMax) GetBoundOverlapping(Point2 pos, Rect clipRect) mut
+		{
+			let bounds = GetBounds(pos);
+			let cellMin = Point2.Max(clipRect.Position / cellSize, bounds.Position);
+			let cellMax = Point2.Min((clipRect.Position + clipRect.Size) / cellSize + .One, (bounds.Position + bounds.Size) / cellSize);
+
+			return (cellMin, cellMax);
 		}
 
 		[Inline]
@@ -138,8 +156,7 @@ namespace Dimtoo
 				if (bounds.Area != 0)
 					batch.HollowRect(bounds, 1, .Gray);
 
-				let cellMin = Point2.Max(renderClip.CameraRect.Position / gri.cellSize, bounds.Position);
-				let cellMax = Point2.Min((renderClip.CameraRect.Position + renderClip.CameraRect.Size) / gri.cellSize + .One, (bounds.Position + bounds.Size));
+				(let cellMin, let cellMax) = gri.GetBoundOverlapping(pos, renderClip.CameraRect);
 
 				for (var y = cellMin.Y; y < cellMax.Y; y++)
 					for (var x = cellMin.X; x < cellMax.X; x++)
@@ -151,10 +168,6 @@ namespace Dimtoo
 		[Optimize]
 		public static Rect MakeGridCellBoundsRect(Grid* grid)
 		{
-			// In cell units!
-			var origin = Point2.Zero;
-			var size = Point2.Zero;
-
 			// Get grid tile bounds
 			Point2 min = .(Grid.MAX_CELL_AXIS), max = default;
 			for (let y < Grid.MAX_CELL_AXIS)
@@ -173,10 +186,7 @@ namespace Dimtoo
 
 			max += .One;
 
-			origin = min;
-			size = max - min;
-
-			return Rect(origin, size);
+			return Rect(min, max - min);
 		}
 	}
 
@@ -226,10 +236,7 @@ namespace Dimtoo
 					continue;
 
 				let pos = tra.position.ToRounded();
-				let bounds = gri.GetBounds(pos);
-
-				let cellMin = Point2.Max(renderClip.CameraRect.Position / gri.cellSize, bounds.Position);
-				let cellMax = Point2.Min((renderClip.CameraRect.Position + renderClip.CameraRect.Size) / gri.cellSize + .One, (bounds.Position + bounds.Size));
+				(let cellMin, let cellMax) = gri.GetBoundOverlapping(pos, renderClip.CameraRect);
 
 				// TODO: animations, variants
 
@@ -237,15 +244,13 @@ namespace Dimtoo
 				for (var y = cellMin.Y; y < cellMax.Y + 1; y++)
 					for (var x = cellMin.X; x < cellMax.X + 1; x++)
 					{
-						TileCorner corner = .None;
-						if (x - 1 >= 0 && y - 1 >= 0 && gri.cells[y - 1][x - 1].IsSolid)
-							corner |= .TopLeft;
-						if (x < Grid.MAX_CELL_AXIS && y - 1 >= 0 && gri.cells[y - 1][x].IsSolid)
-							corner |= .TopRight;
-						if (x - 1 >= 0 && y < Grid.MAX_CELL_AXIS && gri.cells[y][x - 1].IsSolid)
-							corner |= .BottomLeft;
-						if (x < Grid.MAX_CELL_AXIS && y < Grid.MAX_CELL_AXIS && gri.cells[y][x].IsSolid)
-							corner |= .BottomRight;
+						TileCorner corner = .{
+							tiles = .(
+								x - 1 >= 0 && y - 1 >= 0 ? gri.cells[y - 1][x - 1] : .None,
+								x < Grid.MAX_CELL_AXIS && y - 1 >= 0 ? gri.cells[y - 1][x] : .None,
+								x - 1 >= 0 && y < Grid.MAX_CELL_AXIS ? gri.cells[y][x - 1] : .None,
+								x < Grid.MAX_CELL_AXIS && y < Grid.MAX_CELL_AXIS ? gri.cells[y][x] : .None)
+						};
 
 						mixin GetVariation(int variationCount)
 						{
@@ -256,27 +261,37 @@ namespace Dimtoo
 						let tileset = tir.tileset.Asset;
 						if (tileset.HasTile(corner, let variationCount))
 							tileset.Draw(batch, 0, GetVariation!(variationCount), corner, tilePos);
-						else
+						else do
 						{
 							// Assemble from separate tiles?
 
-							if ((corner & .TopLeft) != 0 && (corner & .BottomRight) != 0
-								&& tileset.HasTile(.TopLeft, let tlVariationCount) && tileset.HasTile(.BottomRight, let brVariationCount))
+							if (corner.tiles[0] != .None && corner.tiles[1] == .None && corner.tiles[2] == .None && corner.tiles[3] != .None)
 							{
-								tileset.Draw(batch, 0, GetVariation!(tlVariationCount), .TopLeft, tilePos);
-								tileset.Draw(batch, 0, GetVariation!(brVariationCount), .BottomRight, tilePos);
+								let topLeft = TileCorner{tiles = .(corner.tiles[0],)};
+								let bottomRight = TileCorner{tiles = .(default, default, default, corner.tiles[3])};
+								if (tileset.HasTile(topLeft, let tlVariationCount)
+								&& tileset.HasTile(bottomRight, let brVariationCount))
+								{
+									tileset.Draw(batch, 0, GetVariation!(tlVariationCount), topLeft, tilePos);
+									tileset.Draw(batch, 0, GetVariation!(brVariationCount), bottomRight, tilePos);
+									break;
+								}
 							}
-							else if ((corner & .TopRight) != 0 && (corner & .BottomLeft) != 0
-								&& tileset.HasTile(.TopRight, let trVariationCount) && tileset.HasTile(.BottomLeft, let blVariationCount))
+							else if (corner.tiles[0] == .None && corner.tiles[1] != .None && corner.tiles[2] != .None && corner.tiles[3] == .None)
 							{
-								tileset.Draw(batch, 0, GetVariation!(trVariationCount), .TopRight, tilePos);
-								tileset.Draw(batch, 0, GetVariation!(blVariationCount), .BottomLeft, tilePos);
+								let topRight = TileCorner{tiles = .(default, corner.tiles[1],)};
+								let bottomLeft = TileCorner{tiles = .(default, default, corner.tiles[2],)};
+								if (tileset.HasTile(topRight, let tlVariationCount)
+								&& tileset.HasTile(bottomLeft, let brVariationCount))
+								{
+									tileset.Draw(batch, 0, GetVariation!(tlVariationCount), topRight, tilePos);
+									tileset.Draw(batch, 0, GetVariation!(brVariationCount), bottomLeft, tilePos);
+									break;
+								}
 							}
-							else
-							{
-								// Nothing found
-								batch.Rect(.(tilePos, tileset.TileSize), .Magenta);
-							}
+
+							// Nothing found
+							batch.Rect(.(tilePos, tileset.TileSize), .Magenta);
 						}
 					}
 			}

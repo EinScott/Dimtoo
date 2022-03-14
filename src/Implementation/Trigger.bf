@@ -112,6 +112,8 @@ namespace Dimtoo
 			// i.e.: (various updates adding force, setting movement) -> collision tick & other movement finalizing things
 			//		 -> trigger tick -> ... (movement & now also contact info fresh for next cycle)
 
+			// TODO: make triggers work with grid the same way collision does!
+
 			for (let e in entities)
 			{
 				let tra = componentManager.GetComponent<Transform>(e);

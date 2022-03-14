@@ -3,16 +3,19 @@ using System.IO;
 using System.Collections;
 using System;
 using System.Diagnostics;
-using Atma;
+using Bon;
 
 namespace Dimtoo
 {
 	[RegisterImporter]
 	class AsepriteSpriteImporter : Importer
 	{
-		public String Name => "ase";
+		public override String Name => "aseprite";
 
-		public Result<void> Load(StringView name, Span<uint8> data)
+		static StringView[?] ext = .("ase");
+		public override Span<StringView> TargetExtensions => ext;
+
+		public override Result<void> Load(StringView name, Span<uint8> data)
 		{
 			let mem = scope MemoryStream();
 			Try!(mem.TryWrite(data));
@@ -29,7 +32,7 @@ namespace Dimtoo
 				// Frame texture name
 				frameName.Set(name);
 				i.ToString(frameName);
-				let subTex = Importers.SubmitTextureAsset(frameName, frame.Bitmap);
+				let subTex = Importer.SubmitLoadedTextureAsset(frameName, frame.Bitmap);
 
 				// Add frame
 				frames.Add(Frame(subTex, frame.Duration));
@@ -48,7 +51,7 @@ namespace Dimtoo
 				}
 
 			let asset = new Sprite(frames, animations, origin);
-			if (Importers.SubmitAsset(name, asset) case .Ok)
+			if (Importer.SubmitLoadedAsset(name, asset) case .Ok)
 				return .Ok;
 			else
 			{
@@ -56,39 +59,29 @@ namespace Dimtoo
 				return .Err;
 			}
 		}
-
-		public Result<uint8[]> Build(Stream data, Span<StringView> config, StringView dataFilePath)
-		{
-			return Importer.TryStreamToArray!(data);
-		}
 	}
 
 	// TODO: support spacing
 
-	[Atma.SerializableAttribute]
+	[BonTarget]
 	class TilesetData
 	{
 		public int tileSizeX;
 		public int tileSizeY;
-		public List<TileCornerData> tileCorners ~ if (_ != null) DeleteContainerAndItems!(_);
-
-		[Atma.SerializableAttribute]
-		public class TileCornerData
-		{
-			public bool upLeft, upRight, downLeft, downRight;
-		}	
+		public List<TileCorner> tiles ~ DeleteNotNull!(_);
 	}
 
 	[RegisterImporter]
 	class AsepriteTilesetImporter : Importer
 	{
-		public bool RebuildOnAdditionalChanged => true;
+		public override String Name => "aseTile";
 
-		public String Name => "aseTile";
+		static StringView[?] ext = .("ase");
+		public override Span<StringView> TargetExtensions => ext;
 
-		public Result<void> Load(StringView name, Span<uint8> data)
+		public override Result<void> Load(StringView name, Span<uint8> data)
 		{
-			let corners = scope List<(TileCorner corner, UPoint2 tileOffset)>();
+			let corners = scope List<(TileCorner corner, UPoint2 spriteOffset)>();
 			UPoint2 tileSize;
 			let s = scope ArrayStream(data);
 			{
@@ -100,7 +93,14 @@ namespace Dimtoo
 				let count = sr.Read<uint32>();
 
 				for (let i < count)
-					corners.Add(((.)sr.Read<uint8>(), .Zero));
+				{
+					Tile[4] tiles;
+					tiles[0] = (.)sr.Read<uint8>();
+					tiles[1] = (.)sr.Read<uint8>();
+					tiles[2] = (.)sr.Read<uint8>();
+					tiles[3] = (.)sr.Read<uint8>();
+					corners.Add((TileCorner{tiles = tiles}, .Zero));
+				}
 			}
 
 			let ase = scope Aseprite();
@@ -112,7 +112,7 @@ namespace Dimtoo
 				{
 					if (iCorner >= corners.Count)
 						break;
-					corners[iCorner++].tileOffset = UPoint2(x, y) * tileSize;
+					corners[iCorner++].spriteOffset = UPoint2(x, y) * tileSize;
 				}
 			
 			let frames = scope List<Frame>();
@@ -123,7 +123,7 @@ namespace Dimtoo
 				// Frame texture name
 				frameName.Set(name);
 				iFrame.ToString(frameName);
-				let subTex = Importers.SubmitTextureAsset(frameName, frame.Bitmap);
+				let subTex = Importer.SubmitLoadedTextureAsset(frameName, frame.Bitmap);
 
 				// Add frame
 				frames.Add(Frame(subTex, frame.Duration));
@@ -135,7 +135,7 @@ namespace Dimtoo
 				animations.Add((new String(tag.Name), Animation(tag.From, tag.To)));
 
 			let asset = new Tileset(frames, corners, animations, tileSize);
-			if (Importers.SubmitAsset(name, asset) case .Ok)
+			if (Importer.SubmitLoadedAsset(name, asset) case .Ok)
 				return .Ok;
 			else
 			{
@@ -144,51 +144,45 @@ namespace Dimtoo
 			}
 		}
 
-		public Result<uint8[]> Build(Stream data, Span<StringView> config, StringView dataFilePath)
+		public override Result<uint8[]> Build(StringView filePath)
 		{
-			let tileFile = Path.ChangeExtension(dataFilePath, "json", .. scope .());
-			if (!File.Exists(tileFile))
-				LogErrorReturn!("AsepriteTileImporter: No tile .json file of the same name found");
+			let metaFilePath = ToScopedMetaFilePath!(filePath);
 
-			let json = File.ReadAllText(tileFile, .. scope .());
-			let tileData = scope TilesetData();
-			if (JsonConvert.Deserialize(tileData, json) case .Err)
-				LogErrorReturn!("AsepriteTileImporter: Error deserializing tile data from json file structure");
+			if (!File.Exists(metaFilePath))
+				LogErrorReturn!("AsepriteTileImporter: No tile .bon file of the same name found");
 
-			ArrayStream s = scope .(data.Length + tileData.tileCorners.Count * sizeof(uint32));
+			let bonMetaFile = File.ReadAllText(metaFilePath, .. scope .());
+			var tileData = scope TilesetData();
+			if (Bon.Deserialize(ref tileData, bonMetaFile) case .Err)
+				LogErrorReturn!("AsepriteTileImporter: Error deserializing tile data from bon file structure");
+
+			uint8[] data = null;
+			if (ReadFullFile(filePath, ref data) case .Err)
+				LogErrorReturn!("AsepriteTileImporter: Error reading ase file content");
+			defer delete data;
+
+			ArrayStream s = scope .(data.Count + sizeof(uint32) * 3 + tileData.tiles.Count * sizeof(uint32));
 			{
 				Serializer sr = scope .(s);
 
 				sr.Write((uint32)tileData.tileSizeX);
 				sr.Write((uint32)tileData.tileSizeY);
 
-				sr.Write((uint32)tileData.tileCorners.Count);
+				sr.Write((uint32)tileData.tiles.Count);
 
-				for (let entry in tileData.tileCorners)
+				for (let corner in tileData.tiles)
 				{
-					TileCorner corner = .None;
-
-					if (entry.upLeft)
-						corner |= .TopLeft;
-					if (entry.upRight)
-						corner |= .TopRight;
-
-					if (entry.downLeft)
-						corner |= .BottomLeft;
-					if (entry.downRight)
-						corner |= .BottomRight;
-
-					sr.Write(corner.Underlying);
+					sr.Write((uint8)corner.tiles[0]);
+					sr.Write((uint8)corner.tiles[1]);
+					sr.Write((uint8)corner.tiles[2]);
+					sr.Write((uint8)corner.tiles[3]);
 				}
 
 				if (sr.HadError)
-					LogErrorReturn!("AsepriteTileImporter: Error writing tile data. Not sure why this would ever happen");
+					LogErrorReturn!("AsepriteTileImporter: Error writing tile data");
 			}
 
-			let outData = scope uint8[data.Length];
-			if (!(data.TryRead(outData) case .Ok(data.Length)))
-				LogErrorReturn!("AsepriteTileImporter: Failed to read data from input stream");
-			if (!(s.TryWrite(outData) case .Ok(data.Length)))
+			if (!(s.TryWrite(data) case .Ok(data.Count)))
 				LogErrorReturn!("AsepriteTileImporter: Failed to write data to arrayStream");
 
 			return s.TakeOwnership();

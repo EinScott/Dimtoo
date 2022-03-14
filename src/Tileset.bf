@@ -2,30 +2,27 @@ using System;
 using System.Collections;
 using System.Diagnostics;
 using Pile;
+using Bon;
 
 namespace Dimtoo
 {
-	enum TileCorner : uint8
+	[BonTarget]
+	struct TileCorner : IHashable
 	{
-		None,
+		// 0   1
+		//   x
+		// 2   3
+		public Tile[4] tiles;
 
-		TopLeft = 1,
-		TopRight = 1 << 1,
-		BottomLeft = 1 << 2,
-		BottomRight = 1 << 3,
-
-		LeftSide = TopLeft | BottomLeft,
-		RightSide = TopRight | BottomRight,
-
-		DownSide = BottomLeft | BottomRight,
-		UpSide = TopLeft | TopRight,
-
-		All = LeftSide | RightSide
+		public int GetHashCode()
+		{
+			return (int)tiles[0] + ((int)tiles[1] << 8) + ((int)tiles[2] << 16) + ((int)tiles[3] << 24);
+		}
 	}
 
 	class Tileset
 	{
-		public struct Tile
+		public struct TileSprite
 		{
 			public readonly Rect Clip;
 
@@ -43,10 +40,9 @@ namespace Dimtoo
 		// For a given tile configuration, get the number of variations
 		Dictionary<TileCorner, uint8> variations = new .() ~ delete _;
 
-		// The key here is connection + (variation << 8)
-		Dictionary<uint16, Tile> tiles = new .() ~ delete _;
+		Dictionary<uint64, TileSprite> tiles = new .() ~ delete _;
 
-		public this(Span<Frame> frameSpan, Span<(TileCorner corner, UPoint2 tileOffset)> tileSpan, Span<(String name, Animation anim)> animSpan, UPoint2 tileSize)
+		public this(Span<Frame> frameSpan, Span<(TileCorner corner, UPoint2 spriteOffset)> tileSpan, Span<(String name, Animation anim)> animSpan, UPoint2 tileSize)
 		{
 			Debug.Assert(frameSpan.Length > 0, "Sprite has to have at least one frame");
 
@@ -67,8 +63,8 @@ namespace Dimtoo
 				else variations.Add(tup.corner, 1);
 
 				// Put combination in tiles lookup
-				tiles.Add(((uint16)tup.corner + ((uint16)variation << 8)),
-					Tile(Rect((.)tup.tileOffset, (.)TileSize)));
+				tiles.Add(((uint64)tup.corner.GetHashCode() + ((uint64)variation << 32)),
+					TileSprite(Rect((.)tup.spriteOffset, (.)TileSize)));
 			}
 
 			for (let tup in animSpan)
@@ -97,7 +93,7 @@ namespace Dimtoo
 				Debug.Assert(variationCount > variation);
 			}
 
-			let tile = tiles[(uint16)corner + ((uint16)variation << 8)];
+			let tile = tiles[(uint64)corner.GetHashCode() + ((uint64)variation << 32)];
 			batch.Image(frames[frame].Texture, tile.Clip, position, scale, .Zero, rotation, color);
 		}
 	}

@@ -543,11 +543,9 @@ namespace Dimtoo
 	
 					if (moverPathRect.Overlaps(checkRect))
 					{
-						let bounds = bGri.GetCellBounds();
 						bool moveChanged = false;
-	
-						let cellMin = Point2.Max(moverPathRect.Position / bGri.cellSize, bounds.Position);
-						let cellMax = Point2.Min((moverPathRect.Position + moverPathRect.Size) / bGri.cellSize, (bounds.Position + bounds.Size)) + .One;
+
+						(let cellMin, let cellMax) = bGri.GetBoundOverlapping(bPos, moverPathRect);
 
 						for (let aColl in a.coll)
 							if (aColl.layer.Overlaps(bGri.layer))

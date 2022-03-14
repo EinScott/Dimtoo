@@ -151,7 +151,7 @@ namespace Dimtoo
 			thing.Assign(scene.managedStrings.Add(.. new String()));
 		}
 
-		public void SerializeScene(String buffer, bool exactEntity = true, bool includeDefault = false)
+		public void SerializeScene(String buffer, bool exactEntity = true)
 		{
 			let writer = scope BonWriter(buffer, env.serializeFlags.HasFlag(.Verbose));
 			Serialize.Start(writer);
@@ -166,7 +166,7 @@ namespace Dimtoo
 
 					for (let entity in ent)
 					{
-						SerializeEntity(writer, entity, buffer, exactEntity, includeDefault);
+						SerializeEntity(writer, entity, buffer, exactEntity);
 					}
 
 					serializedEntities = default;
@@ -177,7 +177,7 @@ namespace Dimtoo
 
 					for (let entity in scene.EnumerateEntities())
 					{
-						SerializeEntity(writer, entity, buffer, exactEntity, includeDefault);
+						SerializeEntity(writer, entity, buffer, exactEntity);
 					}
 				}
 			}
@@ -185,7 +185,7 @@ namespace Dimtoo
 			Serialize.End(writer);
 		}
 
-		public void SerializeGroup(Entity[] entities, String buffer, bool exactEntity = true, bool includeDefault = false)
+		public void SerializeGroup(Entity[] entities, String buffer, bool exactEntity = true)
 		{
 			let writer = scope BonWriter(buffer);
 			Serialize.Start(writer);
@@ -199,19 +199,19 @@ namespace Dimtoo
 					if (!scene.EntityLives(entity))
 						continue;
 
-					SerializeEntity(writer, entity, buffer, exactEntity, includeDefault);
+					SerializeEntity(writer, entity, buffer, exactEntity);
 				}
 			}
 
 			Serialize.End(writer);
 		}
 
-		void SerializeEntity(BonWriter writer, Entity e, String buffer, bool exactEntity, bool includeDefault)
+		void SerializeEntity(BonWriter writer, Entity e, String buffer, bool exactEntity)
 		{
 			if (exactEntity)
 			{
 				var e;
-				Serialize.Value(writer, ValueView(typeof(Entity), &e.[Friend]val), env);
+				Serialize.Value(writer, ValueView(typeof(Entity), &e), env);
 				writer.Pair();
 			}
 
@@ -274,7 +274,7 @@ namespace Dimtoo
 			Entity e = 0;
 			if (reader.inStr.Length > 0 && reader.inStr[0].IsDigit)
 			{
-				Try!(Deserialize.Value(reader, ValueView(typeof(Entity), &e.[Friend]val), env));
+				Try!(Deserialize.Value(reader, ValueView(typeof(Entity), &e), env));
 
 				if (e >= MAX_ENTITIES)
 					LogErrorReturn!("Entity out of range");
