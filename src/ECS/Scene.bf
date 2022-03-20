@@ -53,6 +53,8 @@ namespace Dimtoo
 
 		protected readonly ComponentSerializer s = new .(this) ~ delete _;
 
+		readonly List<Entity> deferEntityDestroy = new .() ~ delete _;
+
 		public void Clear()
 		{
 			entMan.ClearEntities();
@@ -62,13 +64,24 @@ namespace Dimtoo
 			for (let s in managedStrings)
 				delete s;
 			managedStrings.Clear();
+			deferEntityDestroy.Clear();
 		}
 
 		[Inline]
-		public void SerializeScene(String buffer) => s.SerializeScene(buffer, true);
+		public void SerializeScene(String buffer)
+		{
+			Debug.Assert(deferEntityDestroy.Count == 0);
+
+			s.SerializeScene(buffer, true);
+		}
 
 		[Inline]
-		public void SerializeSceneAsGroup(String buffer) => s.SerializeScene(buffer, false);
+		public void SerializeSceneAsGroup(String buffer)
+		{
+			Debug.Assert(deferEntityDestroy.Count == 0);
+
+			s.SerializeScene(buffer, false);
+		}
 
 		[Inline]
 		public bool DeserializeScene(StringView saveString)
@@ -92,8 +105,23 @@ namespace Dimtoo
 		[Inline]
 		public Result<void> CreateSpecificEntitiy(Entity e) => entMan.CreateSpecificEntity(e);
 
+		public void DeferDestroyEntity(Entity e)
+		{
+			deferEntityDestroy.Add(e);
+		}
+
+		public void DoDeferredDestroyEntity()
+		{
+			for (let e in deferEntityDestroy)
+				DestroyEntity(e);
+
+			deferEntityDestroy.Clear();
+		}
+
 		public void DestroyEntity(Entity e)
 		{
+			Debug.Assert(entMan.EntityLives(e));
+
 			entMan.DestroyEntity(e);
 			compMan.OnEntityDestroyed(e);
 			sysMan.OnEntityDestroyed(e);

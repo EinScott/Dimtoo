@@ -147,6 +147,15 @@ namespace Dimtoo
 		List<Rect> dbgLastMoveCheckedRects = new List<Rect>() ~ delete _;
 #endif
 
+		// TODO: do bucketing
+		// const int BUCKET_SIZE = 32;
+		// const int MAX_BUCKET_ENTITIES = 64;
+		// Dictionary<Point2, SizedList<Entity, MAX_BUCKET_ENTITIES>> buckets = new .() ~ delete _;
+		// maybe for efficient book-keeping Dictionary<Entity, SizedList<Point2, MAX_ENTITY_BUCKETS>> entityBuckets = new .() ~ delete _;
+		// 
+		// First, go through all entities to correctly update their buckets! (so never rely on prev state... things might have changed!)
+		// Then - as usual - get moverect overlapping chunks & iterate over their entity lists just like we do now (but probably with some more for loops)
+
 		static Type[?] wantsComponents = .(typeof(Transform), typeof(CollisionBody));
 		this
 		{
@@ -158,6 +167,7 @@ namespace Dimtoo
 			return 999; // debug on top
 		}
 
+		[PerfTrack("Dimtoo:DebugRender")]
 		public void Render(Batch2D batch)
 		{
 			if (!debugRenderCollisions)
@@ -169,12 +179,12 @@ namespace Dimtoo
 				let cob = componentManager.GetComponent<CollisionBody>(e);
 
 				if (cob.move != .Zero)
-					batch.Line(tra.position, tra.position + cob.move, 1, .Magenta);
+					batch.Line(tra.point, tra.point + cob.move, 1, .Magenta);
 
 				batch.HollowRect(MakePathRect(PrepareResolveSet(tra, cob)), 1, .Gray);
 
 				for (let coll in cob.colliders)
-					batch.HollowRect(.(tra.position.ToRounded() + coll.rect.Position, coll.rect.Size), 1, .Red);
+					batch.HollowRect(.(tra.point + coll.rect.Position, coll.rect.Size), 1, .Red);
 			}
 
 #if DEBUG
@@ -190,7 +200,7 @@ namespace Dimtoo
 			// We move in whole pixels only, so prepare for that here!
 			ResolveSet a;
 			a.coll = body.colliders;
-			a.pos = tra.position.ToRounded();
+			a.pos = tra.point;
 			a.move = body.move.ToRounded();
 
 			return a;
@@ -216,27 +226,17 @@ namespace Dimtoo
 				let aTra = componentManager.GetComponent<Transform>(e);
 
 				var a = PrepareResolveSet(aTra, aCob);
-				var posRemainder = (aTra.position - a.pos) + (aCob.move - a.move);
+				(a.move, var posRemainder) = aTra.ComputeAddPosition(aCob.move);
 				aCob.move = .Zero;
-
-				if (Math.Round(Math.Abs(posRemainder.X)) >= 1 || Math.Round(Math.Abs(posRemainder.Y)) >= 1)
-				{
-					let rounded = posRemainder.ToRounded();
-					a.move += rounded;
-					posRemainder -= rounded;
-
-					// Guarantees we dont have a value of (0.5 - 1) in here (which would round the other way)
-					posRemainder = Vector2.Clamp(posRemainder, .(-0.49f), .(0.49f));
-				}
 
 				// The position of the entity doesnt change by this, the float remainder would just move the entity in this case
 				// and thus we move that onto the movement amount.
-				Debug.Assert((a.pos + posRemainder).ToRounded() == aTra.position.ToRounded());
+				Debug.Assert(a.pos == aTra.point);
 
 				if (a.move == .Zero)
 				{
 					// Update pos to record subpixel moves
-					aTra.position = a.pos + posRemainder;
+					aTra.Remainder = posRemainder;
 
 					continue; // a must move!
 				}
@@ -367,7 +367,8 @@ namespace Dimtoo
 					posRemainder.Y = 0.49f;
 
 				// Actually move
-				aTra.position = aPos + a.move + posRemainder;
+				aTra.point = aPos + a.move;
+				aTra.Remainder = posRemainder;
 			}
 
 #if DEBUG
@@ -538,7 +539,7 @@ namespace Dimtoo
 					let bGri = componentManager.GetComponent<Grid>(eOther);
 					let bTra = componentManager.GetComponent<Transform>(eOther);
 					
-					let bPos = bTra.position.ToRounded();
+					let bPos = bTra.point;
 					let checkRect = bGri.GetBounds(bPos);
 	
 					if (moverPathRect.Overlaps(checkRect))

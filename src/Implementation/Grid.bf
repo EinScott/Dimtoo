@@ -81,9 +81,14 @@ namespace Dimtoo
 
 		public (Point2 cellMin, Point2 cellMax) GetBoundOverlapping(Point2 pos, Rect clipRect) mut
 		{
-			let bounds = GetBounds(pos);
-			let cellMin = Point2.Max(clipRect.Position / cellSize, bounds.Position);
-			let cellMax = Point2.Min((clipRect.Position + clipRect.Size) / cellSize + .One, (bounds.Position + bounds.Size) / cellSize);
+			if (gridDirty)
+			{
+				cellBounds = GridSystem.MakeGridCellBoundsRect(&this);
+				gridDirty = false;
+			}
+
+			let cellMin = Point2.Max((clipRect.Position - pos - offset) / cellSize, cellBounds.Position);
+			let cellMax = Point2.Min(((clipRect.Position - pos - offset) + clipRect.Size) / cellSize + .One, cellBounds.Position + cellBounds.Size);
 
 			return (cellMin, cellMax);
 		}
@@ -139,6 +144,7 @@ namespace Dimtoo
 			return 997;
 		}
 
+		[PerfTrack("Dimtoo:DebugRender")]
 		public void Render(Batch2D batch)
 		{
 			if (!debugRenderGrid)
@@ -151,7 +157,7 @@ namespace Dimtoo
 				let tra = componentManager.GetComponent<Transform>(e);
 				let gri = componentManager.GetComponent<Grid>(e);
 				
-				let pos = tra.position.ToRounded();
+				let pos = tra.point;
 				let bounds = gri.GetBounds(pos);
 				if (bounds.Area != 0)
 					batch.HollowRect(bounds, 1, .Gray);
@@ -224,6 +230,7 @@ namespace Dimtoo
 
 		public Camera2D renderClip;
 
+		[PerfTrack]
 		public void Render(Batch2D batch)
 		{
 			for (let e in entities)
@@ -235,7 +242,7 @@ namespace Dimtoo
 				if (tir.tileset.Asset == null)
 					continue;
 
-				let pos = tra.position.ToRounded();
+				let pos = tra.point;
 				(let cellMin, let cellMax) = gri.GetBoundOverlapping(pos, renderClip.CameraRect);
 
 				// TODO: animations, variants

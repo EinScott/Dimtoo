@@ -91,6 +91,7 @@ namespace Dimtoo
 
 		public bool debugRenderTriggers;
 
+		[PerfTrack("Dimtoo:DebugRender")]
 		public void Render(Batch2D batch)
 		{
 			if (!debugRenderTriggers)
@@ -102,7 +103,7 @@ namespace Dimtoo
 				let trib = componentManager.GetComponent<TriggerBody>(e);
 
 				for (let t in trib.triggers)
-					batch.HollowRect(.(tra.position.ToRounded() + t.rect.Position, t.rect.Size), 1, .Blue);
+					batch.HollowRect(.(tra.point + t.rect.Position, t.rect.Size), 1, .Blue);
 			}
 		}
 
@@ -129,12 +130,12 @@ namespace Dimtoo
 
 					for (let trig in trib.triggers)
 					{
-						let tRect = Rect(tra.position.ToRounded() + trig.rect.Position, trig.rect.Size);
+						let tRect = Rect(tra.point + trig.rect.Position, trig.rect.Size);
 
 						for (let coll in cob.colliders)
 							if (trig.layer.Overlaps(coll.layer))
 							{
-								let cRect = Rect(traC.position.ToRounded() + coll.rect.Position, coll.rect.Size);
+								let cRect = Rect(traC.point + coll.rect.Position, coll.rect.Size);
 
 								if (tRect.Overlaps(cRect))
 								{

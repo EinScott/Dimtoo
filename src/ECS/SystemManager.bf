@@ -22,8 +22,8 @@ namespace Dimtoo
 		[Inline]
 		public void ClearSystemEntities()
 		{
-			for (let system in systems.Values)
-				system.system.entities.Clear();
+			for (let tup in systems.Values)
+				tup.system.entities.Clear();
 		}
 
 		[Inline]
@@ -54,12 +54,12 @@ namespace Dimtoo
 		[Inline]
 		public void OnEntitySignatureChanged(Entity e, Signature sig)
 		{
-			for (let tup in systems)
+			for (let tup in systems.Values)
 			{
 				// Add and remove from systems according to signature mask
-				if ((tup.value.signature & sig) == tup.value.signature)
-					tup.value.system.entities.Add(e);
-				else tup.value.system.entities.Remove(e);
+				if ((tup.signature & sig) == tup.signature)
+					tup.system.entities.Add(e);
+				else tup.system.entities.Remove(e);
 			}
 		}
 	}

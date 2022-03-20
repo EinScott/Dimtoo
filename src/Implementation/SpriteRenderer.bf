@@ -32,6 +32,7 @@ namespace Dimtoo
 			return 0;
 		}
 
+		[PerfTrack]
 		public void Render(Batch2D batch)
 		{
 			// TODO: render only what we see. same goes for tiles
@@ -41,7 +42,7 @@ namespace Dimtoo
 				let spr = componentManager.GetComponent<SpriteRenderer>(e);
 				let tra = componentManager.GetComponent<Transform>(e);
 
-				spr.sprite.Asset.Draw(batch, spr.frame, tra.position.ToRounded(), tra.scale, tra.rotation);
+				spr.sprite.Asset.Draw(batch, spr.frame, tra.point, tra.scale, tra.rotation);
 			}
 		}
 	}

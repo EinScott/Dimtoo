@@ -39,7 +39,6 @@ namespace Dimtoo
 
 		// For a given tile configuration, get the number of variations
 		Dictionary<TileCorner, uint8> variations = new .() ~ delete _;
-
 		Dictionary<uint64, TileSprite> tiles = new .() ~ delete _;
 
 		public this(Span<Frame> frameSpan, Span<(TileCorner corner, UPoint2 spriteOffset)> tileSpan, Span<(String name, Animation anim)> animSpan, UPoint2 tileSize)
