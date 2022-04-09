@@ -80,7 +80,7 @@ namespace Dimtoo
 	[BonTarget]
 	struct ColliderRect
 	{
-		public this(Rect rect, Edge solid = .All, LayerMask layer = 0x1)
+		public this(Rect rect, LayerMask layer = 0x1, Edge solid = .All)
 		{
 			this.rect = rect;
 			this.solid = solid; // By default all edges solid
@@ -391,6 +391,7 @@ namespace Dimtoo
 			a.move += establishedMove; // Add back onto confirmed slide move to get the full movement
 		}
 
+		[PerfTrack]
 #if !DEBUG
 		[Optimize]
 #endif
