@@ -67,7 +67,7 @@ namespace Dimtoo
 
 			for (let e in entities)
 			{
-				let feed = componentManager.GetComponent<TriggerOverlapFeedback>(e);
+				let feed = scene.GetComponent<TriggerOverlapFeedback>(e);
 
 				// Reset overlaps
 				feed.overlaps.Clear();
@@ -99,8 +99,8 @@ namespace Dimtoo
 
 			for (let e in entities)
 			{
-				let tra = componentManager.GetComponent<Transform>(e);
-				let trib = componentManager.GetComponent<TriggerBody>(e);
+				let tra = scene.GetComponent<Transform>(e);
+				let trib = scene.GetComponent<TriggerBody>(e);
 
 				for (let t in trib.triggers)
 					batch.HollowRect(.(tra.point + t.rect.Position, t.rect.Size), 1, .Blue);
@@ -117,16 +117,16 @@ namespace Dimtoo
 
 			for (let e in entities)
 			{
-				let tra = componentManager.GetComponent<Transform>(e);
-				let trib = componentManager.GetComponent<TriggerBody>(e);
+				let tra = scene.GetComponent<Transform>(e);
+				let trib = scene.GetComponent<TriggerBody>(e);
 
 				trib.prevOverlaps = trib.overlaps;
 				trib.overlaps.Clear();
 
 				for (let eC in collSys.entities)
 				{
-					let traC = componentManager.GetComponent<Transform>(eC);
-					let cob = componentManager.GetComponent<CollisionBody>(eC);
+					let traC = scene.GetComponent<Transform>(eC);
+					let cob = scene.GetComponent<CollisionBody>(eC);
 
 					for (let trig in trib.triggers)
 					{
@@ -146,7 +146,7 @@ namespace Dimtoo
 											otherColliderIndex = @coll.Index
 										});
 
-									if (componentManager.GetComponentOptional<TriggerOverlapFeedback>(eC, let feedback))
+									if (scene.GetComponentOptional<TriggerOverlapFeedback>(eC, let feedback))
 									{
 										feedback.overlaps.Add(TriggerCollisionInfo()
 											{
@@ -176,7 +176,7 @@ namespace Dimtoo
 					{
 						trib.newOverlaps.Add(currOver);
 
-						if (componentManager.GetComponentOptional<TriggerOverlapFeedback>(currOver.other, let feedback))
+						if (scene.GetComponentOptional<TriggerOverlapFeedback>(currOver.other, let feedback))
 							// Technically we've already added this to the feedback.overlaps list somewhere, but we're not going to search, just make it again
 							feedback.newOverlaps.Add(TriggerCollisionInfo()
 								{

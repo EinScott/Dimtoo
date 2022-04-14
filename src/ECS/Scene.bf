@@ -55,6 +55,8 @@ namespace Dimtoo
 
 		readonly List<Entity> deferEntityDestroy = new .() ~ delete _;
 
+		public Camera2D camFocus;
+
 		public void Clear()
 		{
 			entMan.ClearEntities();
@@ -178,6 +180,9 @@ namespace Dimtoo
 		public T* GetComponent<T>(Entity e) where T : struct => compMan.GetComponent<T>(e);
 
 		[Inline]
+		public bool GetComponentOptional<T>(Entity e, out T* component) where T : struct => compMan.GetComponentOptional<T>(e, out component);
+
+		[Inline]
 		public ComponentType GetComponentType<T>() where T : struct => compMan.GetComponentType<T>();
 
 		[Inline]
@@ -192,7 +197,7 @@ namespace Dimtoo
 				s.Add(compMan.GetComponentType(t));
 			sysMan.SetSignature<T>(s);
 
-			sys.componentManager = compMan;
+			sys.scene = this;
 			return sys;
 		}
 	}

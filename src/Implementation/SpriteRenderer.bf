@@ -39,8 +39,8 @@ namespace Dimtoo
 
 			for (let e in entities)
 			{
-				let spr = componentManager.GetComponent<SpriteRenderer>(e);
-				let tra = componentManager.GetComponent<Transform>(e);
+				let spr = scene.GetComponent<SpriteRenderer>(e);
+				let tra = scene.GetComponent<Transform>(e);
 
 				spr.sprite.Asset.Draw(batch, spr.frame, tra.point, tra.scale, tra.rotation);
 			}

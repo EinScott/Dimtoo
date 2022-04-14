@@ -8,7 +8,8 @@ namespace Dimtoo
 	{
 		public readonly Span<Type> signatureTypes;
 		public readonly HashSet<Entity> entities = new .() ~ delete _;
-		public ComponentManager componentManager;
+		public Scene scene;
+
 	}
 
 	class SystemManager

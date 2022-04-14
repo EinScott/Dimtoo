@@ -79,7 +79,7 @@ namespace Dimtoo
 			return Rect(cellBounds.Position * cellSize + pos + offset, cellBounds.Size * cellSize);
 		}
 
-		public (Point2 cellMin, Point2 cellMax) GetBoundOverlapping(Point2 pos, Rect clipRect) mut
+		public (Point2 cellMin, Point2 cellMax) GetCellBoundsOverlapping(Point2 pos, Rect clipRect) mut
 		{
 			if (gridDirty)
 			{
@@ -137,7 +137,6 @@ namespace Dimtoo
 		}
 
 		public bool debugRenderGrid;
-		public Camera2D renderClip;
 
 		public int GetRenderLayer()
 		{
@@ -150,19 +149,19 @@ namespace Dimtoo
 			if (!debugRenderGrid)
 				return;
 
-			Debug.Assert(renderClip != null);
+			Debug.Assert(scene.camFocus != null);
 
 			for (let e in entities)
 			{
-				let tra = componentManager.GetComponent<Transform>(e);
-				let gri = componentManager.GetComponent<Grid>(e);
+				let tra = scene.GetComponent<Transform>(e);
+				let gri = scene.GetComponent<Grid>(e);
 				
 				let pos = tra.point;
 				let bounds = gri.GetBounds(pos);
 				if (bounds.Area != 0)
 					batch.HollowRect(bounds, 1, .Gray);
 
-				(let cellMin, let cellMax) = gri.GetBoundOverlapping(pos, renderClip.CameraRect);
+				(let cellMin, let cellMax) = gri.GetCellBoundsOverlapping(pos, scene.camFocus.CameraRect);
 
 				for (var y = cellMin.Y; y < cellMax.Y; y++)
 					for (var x = cellMin.X; x < cellMax.X; x++)
@@ -235,15 +234,15 @@ namespace Dimtoo
 		{
 			for (let e in entities)
 			{
-				let tra = componentManager.GetComponent<Transform>(e);
-				let gri = componentManager.GetComponent<Grid>(e);
-				let tir = componentManager.GetComponent<TileRenderer>(e);
+				let tra = scene.GetComponent<Transform>(e);
+				let gri = scene.GetComponent<Grid>(e);
+				let tir = scene.GetComponent<TileRenderer>(e);
 
 				if (tir.tileset.Asset == null)
 					continue;
 
 				let pos = tra.point;
-				(let cellMin, let cellMax) = gri.GetBoundOverlapping(pos, renderClip.CameraRect);
+				(let cellMin, let cellMax) = gri.GetCellBoundsOverlapping(pos, renderClip.CameraRect);
 
 				// TODO: animations, variants
 

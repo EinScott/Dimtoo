@@ -67,7 +67,7 @@ namespace Dimtoo
 				fullRemainder -= rounded;
 
 				// Guarantees we dont have a value of (0.5 - 1) in here (which would round the other way)
-				fullRemainder = Vector2.Clamp(fullRemainder, .(-0.49f), .(0.49f));
+				fullRemainder = Vector2.Clamp(fullRemainder, .(-0.499f), .(0.499f));
 			}
 
 			return (addPoint, fullRemainder);

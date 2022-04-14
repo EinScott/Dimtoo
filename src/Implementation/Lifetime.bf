@@ -35,7 +35,7 @@ namespace Dimtoo
 
 			for (let e in entities)
 			{
-				let lit = componentManager.GetComponent<Lifetime>(e);
+				let lit = scene.GetComponent<Lifetime>(e);
 
 				if (lit.lifetime > 0)
 					lit.lifetime -= Time.Delta;
