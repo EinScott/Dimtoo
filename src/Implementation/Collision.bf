@@ -145,8 +145,7 @@ namespace Dimtoo
 		List<Rect> dbgLastMoveCheckedRects = new List<Rect>() ~ delete _;
 #endif
 
-		// TODO: do bucketing
-		const int BUCKET_SIZE = 256;
+		public const int BUCKET_SIZE = 256;
 		const int MAX_BUCKET_ENTITIES = 128;
 		public Dictionary<Point2, SizedList<Entity, const MAX_BUCKET_ENTITIES>> buckets = new .() ~ delete _;
 
@@ -433,10 +432,11 @@ namespace Dimtoo
 			CHECKENT:for (var y = moverPathRect.Top / BUCKET_SIZE; y <= yMaxBucket; y++)
 				for (var x = moverPathRect.Left / BUCKET_SIZE; x <= xMaxBucket; x++)
 				{
-					if (!buckets.ContainsKey(.(x, y)))
+					let bucket = Point2(x, y);
+					if (!buckets.ContainsKey(bucket))
 						continue;
 
-					for (let eOther in entities)
+					for (let eOther in buckets[bucket])
 					{
 						if (eMove == eOther)
 							continue; // b is not a!

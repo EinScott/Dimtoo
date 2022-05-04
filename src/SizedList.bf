@@ -183,7 +183,8 @@ namespace Dimtoo
 				else if (arr[i] == item)
 					found = true;
 			}
-			count--;
+			if (found)
+				count--;
 			return found;
 		}
 

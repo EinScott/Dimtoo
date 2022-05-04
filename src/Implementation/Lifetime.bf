@@ -27,8 +27,6 @@ namespace Dimtoo
 			signatureTypes = wantsComponents;
 		}
 
-		public Scene scene;
-
 		public void Tick()
 		{
 			Debug.Assert(scene != null);
