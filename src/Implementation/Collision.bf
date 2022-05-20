@@ -157,9 +157,9 @@ namespace Dimtoo
 			signatureTypes = wantsComponents;
 		}
 
-		public int GetRenderLayer()
+		public float GetRenderLayer()
 		{
-			return 999; // debug on top
+			return 20; // debug on top
 		}
 
 		[PerfTrack("Dimtoo:DebugRender")]

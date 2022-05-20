@@ -29,8 +29,6 @@ namespace Dimtoo
 
 		public void Tick()
 		{
-			Debug.Assert(scene != null);
-
 			for (let e in entities)
 			{
 				let lit = scene.GetComponent<Lifetime>(e);

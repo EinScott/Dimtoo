@@ -30,7 +30,7 @@ namespace Dimtoo
 			for (let frame in ase.Frames)
 			{
 				// Frame texture name
-				frameName.Set(name);
+				frameName..Set(name)..Append(':');
 				i.ToString(frameName);
 				let subTex = Importer.SubmitLoadedTextureAsset(frameName, frame.Bitmap);
 
@@ -114,34 +114,51 @@ namespace Dimtoo
 						break;
 					corners[iCorner++].spriteOffset = UPoint2(x, y) * tileSize;
 				}
-			
-			let frames = scope List<Frame>();
-			let frameName = scope String();
-			int iFrame = 0;
-			for (let frame in ase.Frames)
+
+			let celMap = scope Bitmap(ase.Width, ase.Height);
+			for (let layer in ase.Layers)
 			{
-				// Frame texture name
-				frameName.Set(name);
-				iFrame.ToString(frameName);
-				let subTex = Importer.SubmitLoadedTextureAsset(frameName, frame.Bitmap);
+				let frames = scope List<Frame>();
+				let frameName = scope String();
+				int iFrame = 0;
+				for (let frame in ase.Frames)
+				{
+					// Frame texture name
+					frameName..Set(name)..Append(':')..Append(layer.Name);
+					iFrame.ToString(frameName);
+					Aseprite.Cel cel = null;
+					for (let i < frame.Cels.Count)
+						if (frame.Cels[i].Layer == layer)
+						{
+							cel = frame.Cels[i];
+							break;
+						}
+					if (cel == null)
+						continue;
 
-				// Add frame
-				frames.Add(Frame(subTex, frame.Duration));
-				iFrame++;
+					// Do this to keep offsets in tact... it's simpler to just let the packer take care of
+					// stripping the edges again... although it's not that nice either...
+					celMap.Clear();
+					celMap.SetPixels(.(cel.X, cel.Y, cel.Width, cel.Height), cel.Pixels);
+					let subTex = Importer.SubmitLoadedTextureAsset(frameName, celMap);
+
+					// Add frame
+					frames.Add(Frame(subTex, frame.Duration));
+					iFrame++;
+				}
+
+				let animations = scope List<(String name, Animation anim)>();
+				for (let tag in ase.Tags)
+					animations.Add((new String(tag.Name), Animation(tag.From, tag.To)));
+
+				let asset = new Tileset(frames, corners, animations, tileSize);
+				if (Importer.SubmitLoadedAsset(ase.Layers.Count > 1 ? scope $"{name}:{layer.Name}" : name, asset) case .Err)
+				{
+					delete asset;
+					return .Err;
+				}
 			}
-
-			let animations = scope List<(String name, Animation anim)>();
-			for (let tag in ase.Tags)
-				animations.Add((new String(tag.Name), Animation(tag.From, tag.To)));
-
-			let asset = new Tileset(frames, corners, animations, tileSize);
-			if (Importer.SubmitLoadedAsset(name, asset) case .Ok)
-				return .Ok;
-			else
-			{
-				delete asset;
-				return .Err;
-			}
+			return .Ok;
 		}
 
 		public override Result<uint8[]> Build(StringView filePath)

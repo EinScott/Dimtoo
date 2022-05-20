@@ -84,9 +84,9 @@ namespace Dimtoo
 			signatureTypes = wantsComponents;
 		}
 
-		public int GetRenderLayer()
+		public float GetRenderLayer()
 		{
-			return 998;
+			return 20;
 		}
 
 		public bool debugRenderTriggers;

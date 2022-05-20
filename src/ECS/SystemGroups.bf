@@ -6,7 +6,7 @@ namespace Dimtoo
 {
 	interface IRendererSystem
 	{
-		public int GetRenderLayer();
+		public float GetRenderLayer();
 		public void Render(Batch2D batch);
 	}
 

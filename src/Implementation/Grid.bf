@@ -138,9 +138,9 @@ namespace Dimtoo
 
 		public bool debugRenderGrid;
 
-		public int GetRenderLayer()
+		public float GetRenderLayer()
 		{
-			return 997;
+			return 20;
 		}
 
 		[PerfTrack("Dimtoo:DebugRender")]
@@ -195,15 +195,25 @@ namespace Dimtoo
 		}
 	}
 
+	[BonTarget]
+	struct TilerLayerRenderInfo
+	{
+		public int renderLayer;
+		public bool renderDepthSorted;
+		public Asset<Tileset> tileset;
+	}
+	
 	[BonTarget,BonPolyRegister]
 	struct TileRenderer
 	{
-		public Asset<Tileset> tileset;
+		public TilerLayerRenderInfo[2] layers;
 
-		public this(Asset<Tileset> tileset)
+		public this(params Asset<Tileset>[2] tilesets)
 		{
-			this.tileset = tileset;
-		}	
+			layers = default;
+			for (let i < layers.Count)
+				layers[i].tileset = tilesets[i];
+		}
 	}
 
 	class TileRenderSystem : ComponentSystem, IRendererSystem
@@ -214,7 +224,7 @@ namespace Dimtoo
 			signatureTypes = wantsComponents;
 		}
 
-		public int GetRenderLayer()
+		public float GetRenderLayer()
 		{
 			return -10;
 		}
@@ -227,7 +237,7 @@ namespace Dimtoo
 				n
 			} ~ delete _;
 
-		public Camera2D renderClip;
+		public Camera2D cam;
 
 		[PerfTrack]
 		public void Render(Batch2D batch)
@@ -238,68 +248,81 @@ namespace Dimtoo
 				let gri = scene.GetComponent<Grid>(e);
 				let tir = scene.GetComponent<TileRenderer>(e);
 
-				if (tir.tileset.Asset == null)
-					continue;
-
 				let pos = tra.point;
-				(let cellMin, let cellMax) = gri.GetCellBoundsOverlapping(pos, renderClip.CameraRect);
+				(let cellMin, let cellMax) = gri.GetCellBoundsOverlapping(pos, cam.CameraRect);
 
 				// TODO: animations, variants
 
-				let originPos = pos + gri.offset - (gri.cellSize / 2);
-				for (var y = cellMin.Y; y < cellMax.Y + 1; y++)
-					for (var x = cellMin.X; x < cellMax.X + 1; x++)
+				for (let t < tir.layers.Count)
+				{
+					var layer = tir.layers[t];
+
+					if (layer.tileset.Asset == null)
+						continue;
+					let tileset = layer.tileset.Asset;
+
+					if (!layer.renderDepthSorted)
+						batch.SetLayer((.)layer.renderLayer);
+
+					let originPos = pos + gri.offset - (gri.cellSize / 2);
+					for (var y = cellMin.Y; y < cellMax.Y + 1; y++)
 					{
-						TileCorner corner = .{
-							tiles = .(
-								x - 1 >= 0 && y - 1 >= 0 ? gri.cells[y - 1][x - 1] : .None,
-								x < Grid.MAX_CELL_AXIS && y - 1 >= 0 ? gri.cells[y - 1][x] : .None,
-								x - 1 >= 0 && y < Grid.MAX_CELL_AXIS ? gri.cells[y][x - 1] : .None,
-								x < Grid.MAX_CELL_AXIS && y < Grid.MAX_CELL_AXIS ? gri.cells[y][x] : .None)
-						};
+						if (layer.renderDepthSorted)
+							batch.SetLayer((.)layer.renderLayer + (((float)originPos.Y - cam.Bottom - cam.Viewport.Y / 2 + (y + 1.5f) * gri.cellSize.Y) / cam.Viewport.Y)); // TODO: maybe make the 1.5f variable?
 
-						mixin GetVariation(int variationCount)
+						for (var x = cellMin.X; x < cellMax.X + 1; x++)
 						{
-							(int)(((noise.GetNoise(x, y) + 1) / 2) * (variationCount - 0.001f))
-						}
+							TileCorner corner = .{
+								tiles = .(
+									x - 1 >= 0 && y - 1 >= 0 ? gri.cells[y - 1][x - 1] : .None,
+									x < Grid.MAX_CELL_AXIS && y - 1 >= 0 ? gri.cells[y - 1][x] : .None,
+									x - 1 >= 0 && y < Grid.MAX_CELL_AXIS ? gri.cells[y][x - 1] : .None,
+									x < Grid.MAX_CELL_AXIS && y < Grid.MAX_CELL_AXIS ? gri.cells[y][x] : .None)
+							};
 
-						let tilePos = originPos + .(x, y) * gri.cellSize;
-						let tileset = tir.tileset.Asset;
-						if (tileset.HasTile(corner, let variationCount))
-							tileset.Draw(batch, 0, GetVariation!(variationCount), corner, tilePos);
-						else do
-						{
-							// Assemble from separate tiles?
-
-							if (corner.tiles[0] != .None && corner.tiles[1] == .None && corner.tiles[2] == .None && corner.tiles[3] != .None)
+							mixin GetVariation(int variationCount)
 							{
-								let topLeft = TileCorner{tiles = .(corner.tiles[0],)};
-								let bottomRight = TileCorner{tiles = .(default, default, default, corner.tiles[3])};
-								if (tileset.HasTile(topLeft, let tlVariationCount)
-								&& tileset.HasTile(bottomRight, let brVariationCount))
-								{
-									tileset.Draw(batch, 0, GetVariation!(tlVariationCount), topLeft, tilePos);
-									tileset.Draw(batch, 0, GetVariation!(brVariationCount), bottomRight, tilePos);
-									break;
-								}
-							}
-							else if (corner.tiles[0] == .None && corner.tiles[1] != .None && corner.tiles[2] != .None && corner.tiles[3] == .None)
-							{
-								let topRight = TileCorner{tiles = .(default, corner.tiles[1],)};
-								let bottomLeft = TileCorner{tiles = .(default, default, corner.tiles[2],)};
-								if (tileset.HasTile(topRight, let tlVariationCount)
-								&& tileset.HasTile(bottomLeft, let brVariationCount))
-								{
-									tileset.Draw(batch, 0, GetVariation!(tlVariationCount), topRight, tilePos);
-									tileset.Draw(batch, 0, GetVariation!(brVariationCount), bottomLeft, tilePos);
-									break;
-								}
+								(int)(((noise.GetNoise(x, y) + 1) / 2) * (variationCount - 0.001f))
 							}
 
-							// Nothing found
-							batch.Rect(.(tilePos, tileset.TileSize), .Magenta);
+							let tilePos = originPos + .(x, y) * gri.cellSize;
+							if (tileset.HasTile(corner, let variationCount))
+								tileset.Draw(batch, 0, GetVariation!(variationCount), corner, tilePos);
+							else do
+							{
+								// Assemble from separate tiles?
+
+								if (corner.tiles[0] != .None && corner.tiles[1] == .None && corner.tiles[2] == .None && corner.tiles[3] != .None)
+								{
+									let topLeft = TileCorner{tiles = .(corner.tiles[0],)};
+									let bottomRight = TileCorner{tiles = .(default, default, default, corner.tiles[3])};
+									if (tileset.HasTile(topLeft, let tlVariationCount)
+									&& tileset.HasTile(bottomRight, let brVariationCount))
+									{
+										tileset.Draw(batch, 0, GetVariation!(tlVariationCount), topLeft, tilePos);
+										tileset.Draw(batch, 0, GetVariation!(brVariationCount), bottomRight, tilePos);
+										break;
+									}
+								}
+								else if (corner.tiles[0] == .None && corner.tiles[1] != .None && corner.tiles[2] != .None && corner.tiles[3] == .None)
+								{
+									let topRight = TileCorner{tiles = .(default, corner.tiles[1],)};
+									let bottomLeft = TileCorner{tiles = .(default, default, corner.tiles[2],)};
+									if (tileset.HasTile(topRight, let tlVariationCount)
+									&& tileset.HasTile(bottomLeft, let brVariationCount))
+									{
+										tileset.Draw(batch, 0, GetVariation!(tlVariationCount), topRight, tilePos);
+										tileset.Draw(batch, 0, GetVariation!(brVariationCount), bottomLeft, tilePos);
+										break;
+									}
+								}
+
+								// Nothing found
+								batch.Rect(.(tilePos, tileset.TileSize), .Magenta);
+							}
 						}
 					}
+				}
 			}
 		}
 	}

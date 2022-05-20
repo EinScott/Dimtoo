@@ -60,7 +60,7 @@ namespace Dimtoo
 
 		protected override void Startup()
 		{
-			frame = new FrameBuffer((.)FrameSize.X, (.)FrameSize.Y, .Color);
+			frame = new FrameBuffer((.)FrameSize.X, (.)FrameSize.Y, .Color, .DepthStencil);
 
 			//Core.Window.Resizable = true; (i guess you should still decide this yourself)
 			System.Window.OnResized.Add(new => Resized);

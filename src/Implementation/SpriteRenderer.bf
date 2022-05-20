@@ -8,6 +8,7 @@ namespace Dimtoo
 	[BonTarget,BonPolyRegister]
 	struct SpriteRenderer
 	{
+		public int layer = 0;
 		public int frame;
 		public Asset<Sprite> sprite;
 
@@ -27,7 +28,9 @@ namespace Dimtoo
 			signatureTypes = wantsComponents;
 		}
 
-		public int GetRenderLayer()
+		public Camera2D cam;
+
+		public float GetRenderLayer()
 		{
 			return 0;
 		}
@@ -35,13 +38,14 @@ namespace Dimtoo
 		[PerfTrack]
 		public void Render(Batch2D batch)
 		{
-			// TODO: render only what we see. same goes for tiles
+			// TODO: render only what we see.
 
 			for (let e in entities)
 			{
 				let spr = scene.GetComponent<SpriteRenderer>(e);
 				let tra = scene.GetComponent<Transform>(e);
-
+				
+				batch.SetLayer(spr.layer + (float)(tra.point.Y - cam.Bottom - (.)cam.Viewport.Y / 2) / cam.Viewport.Y);
 				spr.sprite.Asset.Draw(batch, spr.frame, tra.point, tra.scale, tra.rotation);
 			}
 		}
