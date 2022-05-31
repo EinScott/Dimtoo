@@ -1,7 +1,8 @@
-using System;
+/*using System;
 using Pile;
 using System.Collections;
 using System.Diagnostics;
+using Bon;
 
 // This is good for things like path data... a cleaner way to store, and centrally clearable
 // unlike systems... but local system storage makes more sense right now when that is the only
@@ -10,8 +11,9 @@ using System.Diagnostics;
 // and events are never shared right now and cleared every frame... so i just see the overhead
 // and capacity is probably fine anyway... maybe later
 
-/*namespace Dimtoo
+namespace Dimtoo
 {
+	[BonTarget]
 	struct VarDataRef<T> where T : struct
 	{
 		public int start;
@@ -47,7 +49,7 @@ using System.Diagnostics;
 		}
 
 		public void AddData() {}
-		public void RemoveData() {}
+		//public void RemoveData() {}
 		public void GetData() {}
 	}
 
@@ -72,10 +74,10 @@ using System.Diagnostics;
 
 		}
 
-		public void RemoveData<T>(ref VarDataRef<T> reference, int index, int length = 1) where T : struct
+		/*public void RemoveData<T>(ref VarDataRef<T> reference, int index, int length = 1) where T : struct
 		{
 
-		}
+		}*/
 
 		public Span<T> GetData<T>(VarDataRef<T> reference) where T : struct
 		{

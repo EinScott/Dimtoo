@@ -48,6 +48,8 @@ namespace Dimtoo
 	[BonTarget]
 	struct LayerMask
 	{
+		public const Self ALL = .(uint64.MaxValue);
+
 		public this(uint64 mask = 0x1)
 		{
 			val = mask;
@@ -65,6 +67,9 @@ namespace Dimtoo
 
 		[Inline]
 		public bool Overlaps(LayerMask other) => (val & other.val) > 0;
+
+		[Inline]
+		public LayerMask Combine(LayerMask other) => .(val | other.val);
 
 		[Inline]
 		public static implicit operator Self(uint64 i)
@@ -146,7 +151,7 @@ namespace Dimtoo
 #endif
 
 		public const int BUCKET_SIZE = 256;
-		const int MAX_BUCKET_ENTITIES = 128;
+		const int MAX_BUCKET_ENTITIES = 256;
 		public Dictionary<Point2, SizedList<Entity, const MAX_BUCKET_ENTITIES>> buckets = new .() ~ delete _;
 
 		// Then - as usual - get moverect overlapping chunks & iterate over their entity lists just like we do now (but probably with some more for loops)
@@ -260,6 +265,13 @@ namespace Dimtoo
 				{
 					// Update pos to record subpixel moves
 					aTra.Remainder = posRemainder;
+
+					if (scene.GetComponentOptional<CollisionMoveFeedback>(e, let collFeedback))
+					{
+						// Clear!
+						collFeedback.moveCollision = default;
+						collFeedback.slideCollision = default;
+					}
 
 					continue; // a must move!
 				}
@@ -421,6 +433,7 @@ namespace Dimtoo
 		void CheckMove(Entity eMove, ref ResolveSet a, out CollisionInfo aInfo, GridSystem gridSys)
 		{
 			var moverPathRect = MakePathRect(a);
+			let moverLayerMath = MakeCombinedMask(a.coll);
 
 			aInfo = .();
 
@@ -443,9 +456,9 @@ namespace Dimtoo
 		
 						let bCob = scene.GetComponent<CollisionBody>(eOther);
 						let bTra = scene.GetComponent<Transform>(eOther);
-		
+
 						let b = PrepareResolveSet(bTra, bCob);
-						let checkPathRect = MakePathRect(b);
+						let checkPathRect = MakePathRect(b, moverLayerMath);
 		
 						// If they overlap the moveRect
 						if (moverPathRect.Overlaps(checkPathRect))
@@ -770,8 +783,16 @@ namespace Dimtoo
 			return true;
 		}
 
+		public static LayerMask MakeCombinedMask(ColliderList colliders)
+		{
+			LayerMask m = default;
+			for (let coll in colliders)
+				m = m.Combine(coll.layer);
+			return m;
+		}
+
 		[Optimize]
-		public static Rect MakeColliderBounds(Point2 pos, ColliderList colliders)
+		public static Rect MakeColliderBounds(Point2 pos, ColliderList colliders, LayerMask mask = .ALL)
 		{
 			var origin = pos;
 			var size = Point2.Zero;
@@ -779,6 +800,9 @@ namespace Dimtoo
 			// Get bounds
 			for (let coll in colliders)
 			{
+				if (!coll.layer.Overlaps(mask))
+					continue;
+
 				let boxOrig = pos + coll.rect.Position;
 
 				// Leftmost corner
@@ -800,9 +824,9 @@ namespace Dimtoo
 
 		[Optimize]
 		// For non-mover entities, this just returns bounds
-		public static Rect MakePathRect(ResolveSet s)
+		public static Rect MakePathRect(ResolveSet s, LayerMask mask = .ALL)
 		{
-			var bounds = MakeColliderBounds(s.pos, s.coll);
+			var bounds = MakeColliderBounds(s.pos, s.coll, mask);
 
 			// Expand by movement
 			if (s.move != .Zero)

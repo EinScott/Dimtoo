@@ -268,7 +268,7 @@ namespace Dimtoo
 					for (var y = cellMin.Y; y < cellMax.Y + 1; y++)
 					{
 						if (layer.renderDepthSorted)
-							batch.SetLayer((.)layer.renderLayer + (((float)originPos.Y - cam.Bottom - cam.Viewport.Y / 2 + (y + 1.5f) * gri.cellSize.Y) / cam.Viewport.Y)); // TODO: maybe make the 1.5f variable?
+							batch.SetLayer((.)layer.renderLayer + (((float)originPos.Y - cam.Bottom - cam.Viewport.Y / 2 + (y + 0.75f) * gri.cellSize.Y) / cam.Viewport.Y)); // TODO: maybe make the 1.5f variable?
 
 						for (var x = cellMin.X; x < cellMax.X + 1; x++)
 						{

@@ -6,10 +6,10 @@ using Bon;
 namespace Dimtoo
 {
 	[BonTarget,BonPolyRegister]
-	struct SpriteRenderer
+	struct SpriteState
 	{
 		public int layer = 0;
-		public int frame;
+		public int frame; // TODO: separate system for ticking frame & animation...
 		public Asset<Sprite> sprite;
 
 		public this(Asset<Sprite> sprite, int frame = 0)
@@ -22,7 +22,7 @@ namespace Dimtoo
 
 	class SpriteRendererSystem : ComponentSystem, IRendererSystem
 	{
-		static Type[?] wantsComponents = .(typeof(SpriteRenderer), typeof(Transform));
+		static Type[?] wantsComponents = .(typeof(SpriteState), typeof(Transform));
 		this
 		{
 			signatureTypes = wantsComponents;
@@ -42,7 +42,7 @@ namespace Dimtoo
 
 			for (let e in entities)
 			{
-				let spr = scene.GetComponent<SpriteRenderer>(e);
+				let spr = scene.GetComponent<SpriteState>(e);
 				let tra = scene.GetComponent<Transform>(e);
 				
 				batch.SetLayer(spr.layer + (float)(tra.point.Y - cam.Bottom - (.)cam.Viewport.Y / 2) / cam.Viewport.Y);

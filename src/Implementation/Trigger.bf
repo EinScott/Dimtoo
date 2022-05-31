@@ -113,8 +113,6 @@ namespace Dimtoo
 			// i.e.: (various updates adding force, setting movement) -> collision tick & other movement finalizing things
 			//		 -> trigger tick -> ... (movement & now also contact info fresh for next cycle)
 
-			// TODO: make triggers work with grid the same way collision does!
-
 			for (let e in entities)
 			{
 				let tra = scene.GetComponent<Transform>(e);
@@ -123,41 +121,57 @@ namespace Dimtoo
 				trib.prevOverlaps = trib.overlaps;
 				trib.overlaps.Clear();
 
-				for (let eC in collSys.entities)
-				{
-					let traC = scene.GetComponent<Transform>(eC);
-					let cob = scene.GetComponent<CollisionBody>(eC);
-
-					for (let trig in trib.triggers)
+				let triggerBounds = MakeColliderBounds(tra.point, trib.triggers);
+				let triggerMask = MakeCombinedMask(trib.triggers);
+				let xMaxBucket = triggerBounds.Right / CollisionSystem.BUCKET_SIZE;
+				let yMaxBucket = triggerBounds.Bottom / CollisionSystem.BUCKET_SIZE;
+				CHECKENT:for (var y = triggerBounds.Top / CollisionSystem.BUCKET_SIZE; y <= yMaxBucket; y++)
+					for (var x = triggerBounds.Left / CollisionSystem.BUCKET_SIZE; x <= xMaxBucket; x++)
 					{
-						let tRect = Rect(tra.point + trig.rect.Position, trig.rect.Size);
+						let bucket = Point2(x, y);
+						if (!collSys.buckets.ContainsKey(bucket))
+							continue;
 
-						for (let coll in cob.colliders)
-							if (trig.layer.Overlaps(coll.layer))
+						for (let eC in collSys.buckets[bucket])
+						{
+							let traC = scene.GetComponent<Transform>(eC);
+							let cob = scene.GetComponent<CollisionBody>(eC);
+
+							let collBounds = CollisionSystem.MakeColliderBounds(traC.point, cob.colliders, triggerMask);
+							if (!triggerBounds.Overlaps(collBounds))
+								continue;
+
+							for (let trig in trib.triggers)
 							{
-								let cRect = Rect(traC.point + coll.rect.Position, coll.rect.Size);
-
-								if (tRect.Overlaps(cRect))
-								{
-									trib.overlaps.Add(TriggerCollisionInfo()
-										{
-											other = eC,
-											myColliderIndex = @trig.Index,
-											otherColliderIndex = @coll.Index
-										});
-
-									if (scene.GetComponentOptional<TriggerOverlapFeedback>(eC, let feedback))
+								let tRect = Rect(tra.point + trig.rect.Position, trig.rect.Size);
+		
+								for (let coll in cob.colliders)
+									if (trig.layer.Overlaps(coll.layer))
 									{
-										feedback.overlaps.Add(TriggerCollisionInfo()
+										let cRect = Rect(traC.point + coll.rect.Position, coll.rect.Size);
+		
+										if (tRect.Overlaps(cRect))
+										{
+											trib.overlaps.Add(TriggerCollisionInfo()
+												{
+													other = eC,
+													myColliderIndex = @trig.Index,
+													otherColliderIndex = @coll.Index
+												});
+		
+											if (scene.GetComponentOptional<TriggerOverlapFeedback>(eC, let feedback))
 											{
-												other = e,
-												otherColliderIndex = @trig.Index,
-												myColliderIndex = @coll.Index
-											});
+												feedback.overlaps.Add(TriggerCollisionInfo()
+													{
+														other = e,
+														otherColliderIndex = @trig.Index,
+														myColliderIndex = @coll.Index
+													});
+											}
+										}
 									}
-								}
 							}
-					}
+						}
 				}
 
 				trib.newOverlaps.Clear();
@@ -187,6 +201,45 @@ namespace Dimtoo
 					}
 				}
 			}
+		}
+
+		public static LayerMask MakeCombinedMask(SizedList<TriggerRect, 4> triggers)
+		{
+			LayerMask m = default;
+			for (let trig in triggers)
+				m = m.Combine(trig.layer);
+			return m;
+		}
+
+		[Optimize]
+		public static Rect MakeColliderBounds(Point2 pos, SizedList<TriggerRect, 4> triggers, LayerMask mask = .ALL)
+		{
+			var origin = pos;
+			var size = Point2.Zero;
+
+			// Get bounds
+			for (let trig in triggers)
+			{
+				if (!trig.layer.Overlaps(mask))
+					continue;
+
+				let boxOrig = pos + trig.rect.Position;
+
+				// Leftmost corner
+				if (boxOrig.X < origin.X)
+					origin.X = boxOrig.X;
+				if (boxOrig.Y < origin.Y)
+					origin.Y = boxOrig.Y;
+
+				// Size
+				let boxSize = trig.rect.Size;
+				if (boxOrig.X + boxSize.X > origin.X + size.X)
+					size.X = boxSize.X;
+				if (boxOrig.Y + boxSize.Y > origin.Y + size.Y)
+					size.Y = boxSize.Y;
+			}
+
+			return .(origin, size);
 		}
 	}
 }
