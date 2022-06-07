@@ -1,26 +1,26 @@
-/*using System;
+using System;
 using Pile;
 using System.Collections;
 using System.Diagnostics;
 using Bon;
 
-// This is good for things like path data... a cleaner way to store, and centrally clearable
-// unlike systems... but local system storage makes more sense right now when that is the only
-// thing this storage was made for...
-// -> we could use it for things like collision events... but their buffer is large enough
-// and events are never shared right now and cleared every frame... so i just see the overhead
-// and capacity is probably fine anyway... maybe later
+using internal Dimtoo;
 
 namespace Dimtoo
 {
+	// => THIS IS FOR VAR-SIZE TEMPORARY RUNTIME DATA (like events!) *that get totally wiped frequently*
+
 	[BonTarget]
 	struct VarDataRef<T> where T : struct
 	{
-		public int start;
-		public int len;
+		[BonInclude]
+		internal int start;
+		[BonInclude]
+		internal int len;
 
 		// enumerable stuff...
 		// serializeable stuff
+		// -> will also require some more methods in IVarStorageArrayBase
 	}
 
 	interface IVarStorageArrayBase
@@ -30,27 +30,39 @@ namespace Dimtoo
 
 	class VarStorageArray<T> : IVarStorageArrayBase where T : struct
 	{
-		List<T> data = new .(256) ~ delete _;
-
-		// There will be some "mem management" needed here...
-		// -> add and remove will create holes
-		// so have some... firstHole as a start spot for hole fit searching
-		// also when removing, traverse back all default things aswell!
-
-		// .. does that perf hit make this... feasable?
-		// sure... for paths and stuff like that maybe, but for events?
-		// but maybe we can use this for some bookkeeping instead of WorldData?
-		// -> question there is just persistance, so it may not be quite right... nah..
-		// => THIS IS FOR VAR-SIZE RUNTIME DATA (possibly also events...)
+		readonly List<T> storage = new .(256) ~ delete _;
 
 		public void ClearData()
 		{
-
+			storage.Clear();
 		}
 
-		public void AddData() {}
-		//public void RemoveData() {}
-		public void GetData() {}
+		public void AddData(ref VarDataRef<T> reference, Span<T> data)
+		{
+			if (data.Length == 0)
+				return;
+			
+			let newStart = storage.Count;
+			
+			if (reference.len != 0)
+			{
+				// Bogus "just add it AGAIN" realloc management
+				// We'll clear it a lot, so it *should* be somewhat ok
+
+				let oldSpan = storage.GetRange(reference.start, reference.len);
+				storage.AddRange(oldSpan);
+			}
+
+			storage.AddRange(data);
+
+			reference.start = newStart;
+			reference.len += data.Length;
+		}
+
+		public Span<T> GetData(VarDataRef<T> reference)
+		{
+			return storage.GetRange(reference.start, reference.len);
+		}
 	}
 
 	class VarStorageManager
@@ -66,22 +78,19 @@ namespace Dimtoo
 
 		public void RegisterStorage<T>() where T : struct
 		{
+			Debug.Assert(!storageArrays.ContainsKey(typeof(T)), "Storage type already registered");
 
+			storageArrays.Add(typeof(T), new VarStorageArray<T>());
 		}
 
 		public void AddData<T>(ref VarDataRef<T> reference, params Span<T> data) where T : struct
 		{
-
+			GetStorageArray<T>().AddData(ref reference, data);
 		}
-
-		/*public void RemoveData<T>(ref VarDataRef<T> reference, int index, int length = 1) where T : struct
-		{
-
-		}*/
 
 		public Span<T> GetData<T>(VarDataRef<T> reference) where T : struct
 		{
-			return default;
+			return GetStorageArray<T>().GetData(reference);
 		}
 
 		[Inline]
@@ -92,4 +101,4 @@ namespace Dimtoo
 			return (VarStorageArray<T>)storageArrays[typeof(T)];
 		}
 	}
-}*/
+}
