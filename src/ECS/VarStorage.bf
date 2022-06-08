@@ -17,15 +17,13 @@ namespace Dimtoo
 		internal int start;
 		[BonInclude]
 		internal int len;
-
-		// enumerable stuff...
-		// serializeable stuff
-		// -> will also require some more methods in IVarStorageArrayBase
 	}
 
 	interface IVarStorageArrayBase
 	{
 		void ClearData();
+		Span<uint8> GetSerializeData(int start, int len);
+		Span<uint8> ReserveData(ref int start, ref int len, int reserve);
 	}
 
 	class VarStorageArray<T> : IVarStorageArrayBase where T : struct
@@ -37,31 +35,53 @@ namespace Dimtoo
 			storage.Clear();
 		}
 
+		void PrepareAdd(ref int start, ref int len, int addLen)
+		{
+			let newStart = storage.Count;
+
+			if (len != 0)
+			{
+				// Bogus "just add it AGAIN" realloc management
+				// We'll clear it a lot, so it *should* be somewhat ok
+
+				let oldSpan = storage.GetRange(start, len);
+				storage.AddRange(oldSpan);
+			}
+
+			start = newStart;
+			len += addLen;
+		}
+
 		public void AddData(ref VarDataRef<T> reference, Span<T> data)
 		{
 			if (data.Length == 0)
 				return;
 			
-			let newStart = storage.Count;
-			
-			if (reference.len != 0)
-			{
-				// Bogus "just add it AGAIN" realloc management
-				// We'll clear it a lot, so it *should* be somewhat ok
-
-				let oldSpan = storage.GetRange(reference.start, reference.len);
-				storage.AddRange(oldSpan);
-			}
+			PrepareAdd(ref reference.start, ref reference.len, data.Length);
 
 			storage.AddRange(data);
+		}
 
-			reference.start = newStart;
-			reference.len += data.Length;
+		public Span<uint8> ReserveData(ref int start, ref int len, int reserve)
+		{
+			if (reserve == 0)
+				return .();
+
+			PrepareAdd(ref start, ref len, reserve);
+
+			let ptr = storage.GrowUnitialized(reserve);
+
+			return .((uint8*)ptr, reserve * strideof(T));
 		}
 
 		public Span<T> GetData(VarDataRef<T> reference)
 		{
 			return storage.GetRange(reference.start, reference.len);
+		}
+
+		public Span<uint8> GetSerializeData(int start, int len)
+		{
+			return storage.GetRange(start, len).ToRawData();
 		}
 	}
 
@@ -88,9 +108,24 @@ namespace Dimtoo
 			GetStorageArray<T>().AddData(ref reference, data);
 		}
 
+		public Span<uint8> ReserveData(Type t, ref int start, ref int len, int reserve)
+		{
+			Debug.Assert(storageArrays.ContainsKey(t), "Storage type not registered");
+
+			return storageArrays[t].ReserveData(ref start, ref len, reserve);
+		}
+
 		public Span<T> GetData<T>(VarDataRef<T> reference) where T : struct
 		{
 			return GetStorageArray<T>().GetData(reference);
+		}
+
+		[Inline]
+		public Span<uint8> GetSerializeData(Type t, int start, int len)
+		{
+			if (storageArrays.TryGetValue(t, let arr))
+				return arr.GetSerializeData(start, len);
+			return .();
 		}
 
 		[Inline]

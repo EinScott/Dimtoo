@@ -48,6 +48,51 @@ namespace Dimtoo
 			env.stringViewHandler = new => StringViewHandler;
 			env.typeHandlers.Add(typeof(Entity), ((.)new => SerializeEntity, (.)new => DeserializeEntity));
 			env.typeHandlers.Add(typeof(Asset<>), ((.)new => SerializeAsset, (.)new => DeserializeAsset));
+			env.typeHandlers.Add(typeof(VarDataRef<>), ((.)new => SerializeVarDataRef, (.)new => DeserializeVarDataRef));
+		}
+		
+		void SerializeVarDataRef(BonWriter writer, ValueView val, BonEnvironment env)
+		{
+			let start = GetValField!<int>(val, "start");
+			let len = GetValField!<int>(val, "len");
+
+			let dataSpan = scene.stoMan.GetSerializeData(val.type, start, len);
+			let dataType = (val.type as SpecializedGenericType).GetGenericArg(0);
+
+			using (writer.ArrayBlock())
+			{
+				var ptr = dataSpan.Ptr;
+				for (let i < len)
+				{
+					Serialize.Value(writer, ValueView(dataType, ptr), env);
+
+					ptr += dataType.Stride;
+				}
+			}
+		}
+
+		Result<void> DeserializeVarDataRef(BonReader reader, ValueView val, BonEnvironment env)
+		{
+			let startPtr = (int*)GetValFieldPtr!(val, "start");
+			let lenPtr = (int*)GetValFieldPtr!(val, "len");
+			*startPtr = *lenPtr = 0;
+
+			let dataType = (val.type as SpecializedGenericType).GetGenericArg(0);
+			let dataLen = Try!(reader.ArrayPeekCount());
+
+			let dataSpan = scene.stoMan.ReserveData(dataType, ref *startPtr, ref *lenPtr, dataLen);
+			var ptr = dataSpan.Ptr;
+
+			Try!(reader.ArrayBlock());
+
+			for (let i < dataLen)
+			{
+				Try!(Deserialize.Value(reader, ValueView(dataType, ptr), env));
+
+				ptr += dataType.Stride;
+			}
+
+			return reader.ArrayBlockEnd();
 		}
 
 		void SerializeEntity(BonWriter writer, ValueView val, BonEnvironment env)
