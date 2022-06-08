@@ -51,7 +51,7 @@ namespace Dimtoo
 		protected readonly ComponentManager compMan = new .() ~ delete _;
 		protected readonly EntityManager entMan = new .() ~ delete _;
 
-		internal readonly VarStorageManager stoMan = new .() ~ delete _;
+		//internal readonly VarStorageManager stoMan = new .() ~ delete _;
 		protected readonly ComponentSerializer s = new .(this) ~ delete _;
 
 		readonly List<Entity> deferEntityDestroy = new .() ~ delete _;

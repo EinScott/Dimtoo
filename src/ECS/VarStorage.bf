@@ -1,4 +1,6 @@
-using System;
+// Doesn't seem to actually be more practical than just large enough buffers... memory isn't that sparse
+
+/*using System;
 using Pile;
 using System.Collections;
 using System.Diagnostics;
@@ -76,6 +78,10 @@ namespace Dimtoo
 
 		public Span<T> GetData(VarDataRef<T> reference)
 		{
+			if (reference.len == 0
+				|| reference.start + reference.len > storage.Count)
+				return .();
+
 			return storage.GetRange(reference.start, reference.len);
 		}
 
@@ -136,4 +142,4 @@ namespace Dimtoo
 			return (VarStorageArray<T>)storageArrays[typeof(T)];
 		}
 	}
-}
+}*/

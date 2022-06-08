@@ -107,6 +107,7 @@ namespace Dimtoo
 			}
 		}
 
+		[PerfTrack] // 0.09/0.10 ms before
 		public void TickPostColl(CollisionSystem collSys)
 		{
 			// We assume to be called after movement has taken place, otherwise updating triggers wouldn't make sense

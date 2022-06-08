@@ -48,10 +48,10 @@ namespace Dimtoo
 			env.stringViewHandler = new => StringViewHandler;
 			env.typeHandlers.Add(typeof(Entity), ((.)new => SerializeEntity, (.)new => DeserializeEntity));
 			env.typeHandlers.Add(typeof(Asset<>), ((.)new => SerializeAsset, (.)new => DeserializeAsset));
-			env.typeHandlers.Add(typeof(VarDataRef<>), ((.)new => SerializeVarDataRef, (.)new => DeserializeVarDataRef));
+			//env.typeHandlers.Add(typeof(VarDataRef<>), ((.)new => SerializeVarDataRef, (.)new => DeserializeVarDataRef));
 		}
 		
-		void SerializeVarDataRef(BonWriter writer, ValueView val, BonEnvironment env)
+		/*void SerializeVarDataRef(BonWriter writer, ValueView val, BonEnvironment env)
 		{
 			let start = GetValField!<int>(val, "start");
 			let len = GetValField!<int>(val, "len");
@@ -93,7 +93,7 @@ namespace Dimtoo
 			}
 
 			return reader.ArrayBlockEnd();
-		}
+		}*/
 
 		void SerializeEntity(BonWriter writer, ValueView val, BonEnvironment env)
 		{
