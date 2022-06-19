@@ -150,12 +150,6 @@ namespace Dimtoo
 		List<Rect> dbgLastMoveCheckedRects = new List<Rect>() ~ delete _;
 #endif
 
-		public const int BUCKET_SIZE = 256;
-		const int MAX_BUCKET_ENTITIES = 256;
-		public Dictionary<Point2, SizedList<Entity, const MAX_BUCKET_ENTITIES>> buckets = new .() ~ delete _;
-
-		// Then - as usual - get moverect overlapping chunks & iterate over their entity lists just like we do now (but probably with some more for loops)
-
 		static Type[?] wantsComponents = .(typeof(Transform), typeof(CollisionBody));
 		this
 		{
@@ -172,9 +166,6 @@ namespace Dimtoo
 		{
 			if (!debugRenderCollisions)
 				return;
-			
-			let centerBucket = scene.camFocus.Point / BUCKET_SIZE;
-			batch.HollowRect(.(centerBucket * BUCKET_SIZE, .(BUCKET_SIZE)), 1, .LightGray);
 
 			for (let e in entities)
 			{
@@ -213,37 +204,8 @@ namespace Dimtoo
 #if !DEBUG
 		[Optimize]
 #endif
-		public void Resolve(GridSystem gridSys)
+		public void Resolve(BucketSystem buckSys, GridSystem gridSys)
 		{
-			buckets.Clear();
-
-			for (let e in entities)
-			{
-				if (scene.GetComponentOptional<CollisionReceiveFeedback>(e, let feedback))
-					feedback.collisions.Clear();
-
-				// Put in buckets!
-				let cob = scene.GetComponent<CollisionBody>(e);
-				let tra = scene.GetComponent<Transform>(e);
-				let bounds = MakeColliderBounds(tra.point, cob.colliders);
-
-				let xMaxBucket = bounds.Right / BUCKET_SIZE;
-				let yMaxBucket = bounds.Bottom / BUCKET_SIZE;
-				for (var y = bounds.Top / BUCKET_SIZE; y <= yMaxBucket; y++)
-					for (var x = bounds.Left / BUCKET_SIZE; x <= xMaxBucket; x++)
-					{
-						let bucket = Point2(x, y);
-						let res = buckets.TryGetRef(bucket, ?, var list);
-						if (!res)
-						{
-							buckets.TryAdd(bucket, ?, out list);
-							*list = default;
-						}
-
-						list.Add(e);
-					}
-			}
-
 #if DEBUG
 			let dbgRectCount = dbgLastMoveCheckedRects.Count;
 #endif
@@ -280,7 +242,7 @@ namespace Dimtoo
 
 				// Move info
 				Point2 currMove = a.move;
-				CheckMove(e, ref a, var moveInfo, gridSys);
+				CheckMove(e, ref a, var moveInfo, buckSys, gridSys);
 
 				CollisionInfo slideInfo;
 				{
@@ -290,9 +252,9 @@ namespace Dimtoo
 					switch ((hitX, hitY))
 					{
 					case (true, false):
-						DoSlide(e, ref a, .(0, currMove.Y), out slideInfo, gridSys);
+						DoSlide(e, ref a, .(0, currMove.Y), out slideInfo, buckSys, gridSys);
 					case (false, true):
-						DoSlide(e, ref a, .(currMove.X, 0), out slideInfo, gridSys);
+						DoSlide(e, ref a, .(currMove.X, 0), out slideInfo, buckSys, gridSys);
 					case (true, true): // We hit a corner!
 						Point2 primCheck, secCheck;
 						let xIsPrimaryMove = Math.Abs(currMove.X) > Math.Abs(currMove.Y);
@@ -315,7 +277,7 @@ namespace Dimtoo
 						a.pos += a.move;
 						a.move = primCheck;
 
-						CheckMove(e, ref a, out slideInfo, gridSys);
+						CheckMove(e, ref a, out slideInfo, buckSys, gridSys);
 
 						if (a.move == .Zero || equalMove) // Check second one, if first side blocks or we move equally in both directions
 						{
@@ -325,7 +287,7 @@ namespace Dimtoo
 
 							a.move = secCheck;
 
-							CheckMove(e, ref a, out slideInfo, gridSys);
+							CheckMove(e, ref a, out slideInfo, buckSys, gridSys);
 
 							if (equalMove) // We move equally to both sides from the corner, and could also go to both
 							{
@@ -413,7 +375,7 @@ namespace Dimtoo
 		}
 
 		[Inline]
-		void DoSlide(Entity e, ref ResolveSet a, Point2 slideMove, out CollisionInfo slideInfo, GridSystem gridSys)
+		void DoSlide(Entity e, ref ResolveSet a, Point2 slideMove, out CollisionInfo slideInfo, BucketSystem buckSys, GridSystem gridSys)
 		{
 			let establishedMove = a.move; // Save this here for later
 
@@ -421,7 +383,7 @@ namespace Dimtoo
 			a.pos += a.move;
 			a.move = slideMove;
 
-			CheckMove(e, ref a, out slideInfo, gridSys);
+			CheckMove(e, ref a, out slideInfo, buckSys, gridSys);
 
 			a.move += establishedMove; // Add back onto confirmed slide move to get the full movement
 		}
@@ -430,7 +392,7 @@ namespace Dimtoo
 #if !DEBUG
 		[Optimize]
 #endif
-		void CheckMove(Entity eMove, ref ResolveSet a, out CollisionInfo aInfo, GridSystem gridSys)
+		void CheckMove(Entity eMove, ref ResolveSet a, out CollisionInfo aInfo, BucketSystem buckSys, GridSystem gridSys)
 		{
 			var moverPathRect = MakePathRect(a);
 			let moverLayerMath = MakeCombinedMask(a.coll);
@@ -440,16 +402,16 @@ namespace Dimtoo
 			Entity eHit = 0;
 			CollisionInfo bInfo = .();
 
-			let xMaxBucket = moverPathRect.Right / BUCKET_SIZE;
-			let yMaxBucket = moverPathRect.Bottom / BUCKET_SIZE;
-			CHECKENT:for (var y = moverPathRect.Top / BUCKET_SIZE; y <= yMaxBucket; y++)
-				for (var x = moverPathRect.Left / BUCKET_SIZE; x <= xMaxBucket; x++)
+			let xMaxBucket = moverPathRect.Right / BucketSystem.BUCKET_SIZE;
+			let yMaxBucket = moverPathRect.Bottom / BucketSystem.BUCKET_SIZE;
+			CHECKENT:for (var y = moverPathRect.Top / BucketSystem.BUCKET_SIZE; y <= yMaxBucket; y++)
+				for (var x = moverPathRect.Left / BucketSystem.BUCKET_SIZE; x <= xMaxBucket; x++)
 				{
 					let bucket = Point2(x, y);
-					if (!buckets.ContainsKey(bucket))
+					if (!buckSys.buckets.ContainsKey(bucket))
 						continue;
 
-					for (let eOther in buckets[bucket])
+					for (let eOther in buckSys.buckets[bucket])
 					{
 						if (eMove == eOther)
 							continue; // b is not a!

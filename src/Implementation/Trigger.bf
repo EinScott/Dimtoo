@@ -108,7 +108,7 @@ namespace Dimtoo
 		}
 
 		[PerfTrack] // 0.09/0.10 ms before
-		public void TickPostColl(CollisionSystem collSys)
+		public void TickPostColl(BucketSystem buckSys)
 		{
 			// We assume to be called after movement has taken place, otherwise updating triggers wouldn't make sense
 			// i.e.: (various updates adding force, setting movement) -> collision tick & other movement finalizing things
@@ -124,16 +124,16 @@ namespace Dimtoo
 
 				let triggerBounds = MakeColliderBounds(tra.point, trib.triggers);
 				let triggerMask = MakeCombinedMask(trib.triggers);
-				let xMaxBucket = triggerBounds.Right / CollisionSystem.BUCKET_SIZE;
-				let yMaxBucket = triggerBounds.Bottom / CollisionSystem.BUCKET_SIZE;
-				CHECKENT:for (var y = triggerBounds.Top / CollisionSystem.BUCKET_SIZE; y <= yMaxBucket; y++)
-					for (var x = triggerBounds.Left / CollisionSystem.BUCKET_SIZE; x <= xMaxBucket; x++)
+				let xMaxBucket = triggerBounds.Right / BucketSystem.BUCKET_SIZE;
+				let yMaxBucket = triggerBounds.Bottom / BucketSystem.BUCKET_SIZE;
+				CHECKENT:for (var y = triggerBounds.Top / BucketSystem.BUCKET_SIZE; y <= yMaxBucket; y++)
+					for (var x = triggerBounds.Left / BucketSystem.BUCKET_SIZE; x <= xMaxBucket; x++)
 					{
 						let bucket = Point2(x, y);
-						if (!collSys.buckets.ContainsKey(bucket))
+						if (!buckSys.buckets.ContainsKey(bucket))
 							continue;
 
-						for (let eC in collSys.buckets[bucket])
+						for (let eC in buckSys.buckets[bucket])
 						{
 							let traC = scene.GetComponent<Transform>(eC);
 							let cob = scene.GetComponent<CollisionBody>(eC);

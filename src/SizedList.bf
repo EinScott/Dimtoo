@@ -171,6 +171,16 @@ namespace Dimtoo
 			arr[count++] = item;
 		}
 
+		public void Insert(int index, T item) mut
+		{
+			Runtime.Assert(count < Size);
+
+			if (index < count)
+				Internal.MemMove(&arr[index + 1], &arr[index], (count - index) * strideof(T), alignof(T));
+			arr[index] = item;
+			count++;
+		}
+
 		public bool Remove(T item) mut
 		{
 			bool found = false;
@@ -197,7 +207,7 @@ namespace Dimtoo
 				count--;
 				return;
 			}
-			Internal.MemMove(&arr[index], &arr[index + 1], count - index - 1);
+			Internal.MemMove(&arr[index], &arr[index + 1], (count - index - 1) * strideof(T), alignof(T));
 		}
 
 		public void RemoveAtFast(int index) mut
