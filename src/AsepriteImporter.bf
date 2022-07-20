@@ -75,6 +75,8 @@ namespace Dimtoo
 			}
 			else
 			{
+				// TODO: if a layer has no frams for an animation, dont make it have that animation!
+
 				let celMap = scope Bitmap(ase.Width, ase.Height);
 				for (let layer in ase.Layers)
 				{

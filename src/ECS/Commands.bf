@@ -1,6 +1,7 @@
 using Dimtoo;
 using System;
 using System.IO;
+using System.Diagnostics;
 
 namespace Pile
 {
@@ -109,7 +110,21 @@ namespace Pile
 				return;
 			}
 
-			sceneFocus.DeserializeScene(save);
+			sceneFocus.DeserializeScene(save, ?);
+		}
+
+		[Description("Shows the save directory in the file explorer")]
+		public static void SavesFolder()
+		{
+#if BF_PLATFORM_WINDOWS
+			ProcessStartInfo psi = scope ProcessStartInfo();
+			psi.SetFileName("explorer");
+			psi.SetArguments(Path.InternalCombine(.. scope .(System.UserPath.Length + 16), System.UserPath, "saves"));
+			psi.UseShellExecute = false;
+
+			SpawnedProcess process = scope SpawnedProcess();
+			process.Start(psi).IgnoreError();
+#endif
 		}
 
 		[Description("Toggles the editor, if there is one")]

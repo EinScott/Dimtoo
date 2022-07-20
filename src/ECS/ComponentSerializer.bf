@@ -274,8 +274,10 @@ namespace Dimtoo
 			writer.EntryEnd();
 		}
 
-		public Result<void> Deserialize(StringView buffer, List<Entity> createdEntities = null)
+		public Result<void> Deserialize(BonContext buffer, out BonContext nextContext, List<Entity> createdEntities = null)
 		{
+			nextContext = default;
+
 			let reader = scope BonReader();
 			Try!(reader.Setup(buffer));
 			Try!(Deserialize.Start(reader));
@@ -294,7 +296,7 @@ namespace Dimtoo
 			}
 
 			Try!(reader.ArrayBlockEnd());
-			/*let context =*/ Try!(Deserialize.End(reader));
+			nextContext = Try!(Deserialize.End(reader));
 
 			// Only added to when we have entity refs!
 			if (deferResolveEntityRefs.Count > 0)

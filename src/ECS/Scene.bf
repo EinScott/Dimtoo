@@ -87,10 +87,10 @@ namespace Dimtoo
 		}
 
 		[Inline]
-		public bool DeserializeScene(StringView saveString)
+		public bool DeserializeScene(BonContext saveString, out BonContext nextContext)
 		{
 			Clear();
-			return s.Deserialize(saveString) case .Ok;
+			return s.Deserialize(saveString, out nextContext) case .Ok;
 		}
 
 		[Inline]
@@ -100,7 +100,7 @@ namespace Dimtoo
 		public void SerializeGroup(String buffer, params Entity[] entities) => s.SerializeGroup(entities, buffer, false);
 
 		[Inline]
-		public bool CreateFromGroup(StringView saveString, List<Entity> createdEntities = null) => s.Deserialize(saveString, createdEntities) case .Ok;
+		public bool CreateFromGroup(BonContext saveString, out BonContext nextContext, List<Entity> createdEntities = null) => s.Deserialize(saveString, out nextContext, createdEntities) case .Ok;
 
 		[Inline]
 		public Entity CreateEntity() => entMan.CreateEntity();

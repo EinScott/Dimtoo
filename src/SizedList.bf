@@ -177,6 +177,14 @@ namespace Dimtoo
 			arr[count++] = item;
 		}
 
+		public void AddRange(Span<T> items) mut
+		{
+			Runtime.Assert(count + items.Length <= Size);
+
+			items.CopyTo(.(&arr[count], items.Length));
+			count += items.Length;
+		}
+
 		public void Insert(int index, T item) mut
 		{
 			Runtime.Assert(index <= count);
