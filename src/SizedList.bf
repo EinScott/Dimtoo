@@ -158,6 +158,12 @@ namespace Dimtoo
 		[Inline]
 		public bool IsFull => count == Size;
 
+		[Inline]
+		public ref T First mut => ref this[0];
+
+		[Inline]
+		public ref T Last mut => ref this[count - 1];
+
 		public void Clear() mut
 		{
 			arr = default;
@@ -173,6 +179,7 @@ namespace Dimtoo
 
 		public void Insert(int index, T item) mut
 		{
+			Runtime.Assert(index <= count);
 			Runtime.Assert(count < Size);
 
 			if (index < count)

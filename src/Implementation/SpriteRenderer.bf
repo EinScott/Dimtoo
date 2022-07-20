@@ -9,7 +9,11 @@ namespace Dimtoo
 	struct SpriteState
 	{
 		public int layer = 0;
-		public int frame; // TODO: separate system for ticking frame & animation...
+		public int frame;
+		public float frameTime = 0;
+		public int state = 0;
+		public int nextState = 0;
+		public bool queueNextState = false;
 		public Asset<Sprite> sprite;
 
 		public this(Asset<Sprite> sprite, int frame = 0)
@@ -38,15 +42,43 @@ namespace Dimtoo
 		[PerfTrack]
 		public void Render(Batch2D batch)
 		{
-			// TODO: render only what we see.
-
 			for (let e in entities)
 			{
 				let spr = scene.GetComponent<SpriteState>(e);
 				let tra = scene.GetComponent<Transform>(e);
-				
-				batch.SetLayer(spr.layer + (float)(tra.point.Y - cam.Bottom - (.)cam.Viewport.Y / 2) / cam.Viewport.Y);
-				spr.sprite.Asset.Draw(batch, spr.frame, tra.point, tra.scale, tra.rotation);
+
+				let sprite = spr.sprite.Asset;
+				var localBounds = sprite.bounds;
+				localBounds.Position += tra.point;
+				if (!cam.CameraRect.Overlaps(localBounds))
+					continue;
+
+				let depth = (float)(tra.point.Y - cam.Bottom - (float)cam.Viewport.Y / 2) / cam.Viewport.Y;
+				batch.SetLayer((float)spr.layer + depth);
+
+				if (sprite.Animations.Length > 0)
+				{
+					spr.frameTime += Time.Delta;
+					while (spr.frameTime > sprite.Frames[spr.frame].Duration)
+					{
+						spr.frameTime -= sprite.Frames[spr.frame].Duration;
+						spr.frame++;
+
+						if (sprite.Animations[spr.state].To < spr.frame)
+						{
+							if (spr.queueNextState)
+							{
+								Debug.Assert(spr.nextState < sprite.Animations.Length);
+								spr.state = spr.nextState;
+								spr.queueNextState = false;
+							}
+
+							spr.frame = sprite.Animations[spr.state].From;
+						}
+					}
+				}
+
+				sprite.Draw(batch, spr.frame, tra.point, tra.scale, tra.rotation);
 			}
 		}
 	}

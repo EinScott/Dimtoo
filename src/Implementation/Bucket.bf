@@ -14,7 +14,7 @@ namespace Dimtoo
 		}
 
 		public CollisionSystem collSys;
-		public bool debugRender;
+		public bool debugRenderBucket;
 
 		public const int BUCKET_SIZE = 256;
 		const int MAX_BUCKET_ENTITIES = 256;
@@ -25,7 +25,7 @@ namespace Dimtoo
 		[PerfTrack("Dimtoo:DebugRender")]
 		public void Render(Batch2D batch)
 		{
-			if (!debugRender)
+			if (!debugRenderBucket)
 				return;
 			
 			let centerBucket = scene.camFocus.Point / BUCKET_SIZE;

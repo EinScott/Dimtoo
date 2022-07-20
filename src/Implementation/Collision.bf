@@ -113,7 +113,7 @@ namespace Dimtoo
 	[BonTarget,BonPolyRegister]
 	struct CollisionReceiveFeedback
 	{
-		public SizedList<CollisionInfo, const 8> collisions;
+		public SizedList<CollisionInfo, const 32> collisions;
 
 		[Inline]
 		public bool Occured() => collisions.Count > 0;

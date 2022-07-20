@@ -8,11 +8,14 @@ namespace Dimtoo
 	class Sprite
 	{
 		Frame[] frames ~ delete _;
-		Dictionary<String,Animation> animations ~ delete _;
-		
+		Animation[] animations ~ delete _;
+		Dictionary<String,int> animNameMap ~ DeleteDictionaryAndKeys!(_);
+
+		public readonly Rect bounds;
 		public readonly Point2 Origin;
 
 		public readonly ReadOnlySpan<Frame> Frames;
+		public readonly ReadOnlySpan<Animation> Animations;
 
 		public this(Span<Frame> frameSpan, Span<(String name, Animation anim)> animSpan, Point2 origin = .Zero)
 		{
@@ -21,23 +24,42 @@ namespace Dimtoo
 			frames = new Frame[frameSpan.Length];
 			if (frameSpan.Length > 0) frameSpan.CopyTo(frames);
 
-			animations = new .();
+			animations = new .[animSpan.Length];
+			animNameMap = new .((.)animSpan.Length);
 			for (let tup in animSpan)
-				animations.Add(tup.name, tup.anim);
+			{
+				animations[@tup.Index] = tup.anim;
+				animNameMap.Add(tup.name, @tup.Index);
+			}
 
 			Frames = frames;
 			Origin = origin;
+
+			Animations = animations;
+			Frames = frames;
+
+			let subt = frameSpan[0].Texture;
+			bounds = .(subt.Source.Position + subt.Frame.Position, subt.Frame.Size);
+			bounds.Position -= origin;
 		}
 
 		[Inline]
-		public bool HasAnimation(String name) => animations.ContainsKey(name);
+		public bool HasAnimation(String name) => animNameMap.ContainsKey(name);
 
 		public Animation GetAnimation(String name)
 		{
-			if (animations.TryGetValue(name, let anim))
-				return anim;
+			if (animNameMap.TryGetValue(name, let animIdx))
+				return animations[animIdx];
 
 			Runtime.FatalError(scope $"Animation {name} couldn't be found");
+		}
+
+		public int GetAnimationIndex(String name)
+		{
+			if (animNameMap.TryGetValue(name, let animIdx))
+				return animIdx;
+
+			return -1;
 		}
 
 		[Inline]

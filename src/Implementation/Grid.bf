@@ -39,6 +39,9 @@ namespace Dimtoo
 		public uint8 /* - more like 7 */ Flags => (uint8)this >> 1;
 	}
 
+	// TODO: per "type of tile" collMask...?
+	// -> would be useful... i think?
+
 	[BonTarget,BonPolyRegister]
 	struct Grid
 	{
