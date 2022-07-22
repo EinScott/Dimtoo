@@ -48,7 +48,7 @@ namespace Dimtoo
 				let tra = scene.GetComponent<Transform>(e);
 
 				let sprite = spr.sprite.Asset;
-				var localBounds = sprite.bounds;
+				var localBounds = sprite.Bounds;
 				localBounds.Position += tra.point;
 				if (!cam.CameraRect.Overlaps(localBounds))
 					continue;

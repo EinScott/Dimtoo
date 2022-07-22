@@ -245,6 +245,9 @@ namespace Dimtoo
 					iFrame++;
 				}
 
+				if (frames.Count == 0)
+					continue;
+
 				let animations = scope List<(String name, Animation anim)>();
 				for (let tag in ase.Tags)
 				{

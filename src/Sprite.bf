@@ -11,7 +11,12 @@ namespace Dimtoo
 		Animation[] animations ~ delete _;
 		Dictionary<String,int> animNameMap ~ DeleteDictionaryAndKeys!(_);
 
-		public readonly Rect bounds;
+		public readonly Rect Bounds => {
+			let subt = frames[0].Texture;
+			var bounds = subt.Frame;
+			bounds.Position -= Origin;
+			bounds
+		};
 		public readonly Point2 Origin;
 
 		public readonly ReadOnlySpan<Frame> Frames;
@@ -37,10 +42,6 @@ namespace Dimtoo
 
 			Animations = animations;
 			Frames = frames;
-
-			let subt = frameSpan[0].Texture;
-			bounds = .(subt.Source.Position + subt.Frame.Position, subt.Frame.Size);
-			bounds.Position -= origin;
 		}
 
 		[Inline]
