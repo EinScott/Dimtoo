@@ -199,7 +199,7 @@ namespace Dimtoo
 		public void SerializeScene(String buffer, bool exactEntity = true)
 		{
 			let writer = scope BonWriter(buffer, env.serializeFlags.HasFlag(.Verbose));
-			Serialize.Start(writer);
+			let startLen = Serialize.Start(writer);
 
 			using (writer.ArrayBlock())
 			{
@@ -227,13 +227,13 @@ namespace Dimtoo
 				}
 			}
 
-			Serialize.End(writer);
+			Serialize.End(writer, startLen);
 		}
 
 		public void SerializeGroup(Entity[] entities, String buffer, bool exactEntity = true)
 		{
 			let writer = scope BonWriter(buffer);
-			Serialize.Start(writer);
+			let startLen = Serialize.Start(writer);
 
 			serializedEntities = exactEntity ? .() : entities;
 
@@ -248,7 +248,7 @@ namespace Dimtoo
 				}
 			}
 
-			Serialize.End(writer);
+			Serialize.End(writer, startLen);
 		}
 
 		void SerializeEntity(BonWriter writer, Entity e, String buffer, bool exactEntity)

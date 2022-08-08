@@ -1,5 +1,5 @@
 FileVersion = 1
-Dependencies = {corlib = "*", Pile = "*", FastNoiseLite = "*"}
+Dependencies = {corlib = "*", FastNoiseLite = "*", corlib = "*", bon = "*", Pile = "*"}
 
 [Project]
 Name = "Dimtoo"

@@ -45,7 +45,7 @@ namespace Dimtoo
 	[BonTarget,BonPolyRegister]
 	struct Grid
 	{
-		public LayerMask layer;
+		public Mask layer;
 
 		public Point2 offset;
 		public UPoint2 cellSize;
@@ -57,7 +57,7 @@ namespace Dimtoo
 		[BonInclude]
 		Rect cellBounds;
 
-		public this(UPoint2 cellSize, LayerMask layer = 0x1)
+		public this(UPoint2 cellSize, Mask layer = 0x1)
 		{
 			this = default;
 			this.cellSize = cellSize;

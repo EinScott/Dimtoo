@@ -209,7 +209,10 @@ namespace Dimtoo
 					found = true;
 			}
 			if (found)
+			{
 				count--;
+				arr[count] = default;
+			}
 			return found;
 		}
 

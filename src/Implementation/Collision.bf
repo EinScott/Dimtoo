@@ -46,9 +46,10 @@ namespace Dimtoo
 	}
 
 	[BonTarget]
-	struct LayerMask
+	struct Mask
 	{
-		public const Self ALL = .(uint64.MaxValue);
+		public const Self None = default;
+		public const Self All = .(uint64.MaxValue);
 
 		public this(uint64 mask = 0x1)
 		{
@@ -66,15 +67,15 @@ namespace Dimtoo
 		}
 
 		[Inline]
-		public bool Overlaps(LayerMask other) => (val & other.val) > 0;
+		public bool Overlaps(Mask other) => (val & other.val) > 0;
 
 		[Inline]
-		public LayerMask Combine(LayerMask other) => .(val | other.val);
+		public Mask Combine(Mask other) => .(val | other.val);
 
 		[Inline]
 		public static implicit operator Self(uint64 i)
 		{
-			LayerMask m = default;
+			Mask m = default;
 			m.val = i;
 			return m;
 		}
@@ -83,16 +84,18 @@ namespace Dimtoo
 	[BonTarget]
 	struct ColliderRect
 	{
-		public this(Rect rect, LayerMask layer = 0x1, Edge solid = .All)
+		public this(Rect rect, Mask layer = 0x1, Edge solid = .All, Mask tag = 0)
 		{
 			this.rect = rect;
 			this.solid = solid; // By default all edges solid
-			this.layer = layer; // By default on layer 0
+			this.layer = layer; // By default only on layer 1
+			this.tag = tag; // By default no tag
 		}
 
 		public Rect rect;
 		public Edge solid;
-		public LayerMask layer;
+		public Mask layer; // Layers on which this rect collides
+		public Mask tag; // Tags for further filtering on external systems like triggers, etc...
 	}
 
 	// Feedback of a body's own movement collision "it collides into something else"
@@ -395,7 +398,7 @@ namespace Dimtoo
 		void CheckMove(Entity eMove, ref ResolveSet a, out CollisionInfo aInfo, BucketSystem buckSys, GridSystem gridSys)
 		{
 			var moverPathRect = MakePathRect(a);
-			let moverLayerMath = MakeCombinedMask(a.coll);
+			let moverLayerMath = MakeCombinedLayerMask(a.coll);
 
 			aInfo = .();
 
@@ -745,16 +748,16 @@ namespace Dimtoo
 			return true;
 		}
 
-		public static LayerMask MakeCombinedMask(ColliderList colliders)
+		public static Mask MakeCombinedLayerMask(ColliderList colliders)
 		{
-			LayerMask m = default;
+			Mask m = default;
 			for (let coll in colliders)
 				m = m.Combine(coll.layer);
 			return m;
 		}
 
 		[Optimize]
-		public static Rect MakeColliderBounds(Point2 pos, ColliderList colliders, LayerMask mask = .ALL)
+		public static Rect MakeColliderBounds(Point2 pos, ColliderList colliders, Mask layer = .All, Mask tag = .None)
 		{
 			var origin = pos;
 			var size = Point2.Zero;
@@ -762,7 +765,8 @@ namespace Dimtoo
 			// Get bounds
 			for (let coll in colliders)
 			{
-				if (!coll.layer.Overlaps(mask))
+				if (!coll.layer.Overlaps(layer)
+					&& !coll.tag.Overlaps(tag))
 					continue;
 
 				let boxOrig = pos + coll.rect.Position;
@@ -786,7 +790,7 @@ namespace Dimtoo
 
 		[Optimize]
 		// For non-mover entities, this just returns bounds
-		public static Rect MakePathRect(ResolveSet s, LayerMask mask = .ALL)
+		public static Rect MakePathRect(ResolveSet s, Mask mask = .All)
 		{
 			var bounds = MakeColliderBounds(s.pos, s.coll, mask);
 
