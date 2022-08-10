@@ -25,6 +25,8 @@ namespace Dimtoo
 	struct TriggerEntry
 	{
 		public Trigger trigger;
+		public bool checkObstruction;
+		public Mask obstructTag = .All;
 
 		// Entries are all sorted by distance to trigger center
 
@@ -119,7 +121,6 @@ namespace Dimtoo
 			return 20;
 		}
 
-		BucketSystem sys;
 		public bool debugRenderTriggers;
 
 		[PerfTrack("Dimtoo:DebugRender")]
@@ -137,29 +138,22 @@ namespace Dimtoo
 				{
 					switch (entry.trigger.shape)
 					{
-					case .Rect(let rect):
-						batch.HollowRect(.(tra.point + rect.Position, rect.Size), 1, .Blue);
-					case .Circle(let position, let radius):
-						batch.HollowCircle(tra.point + position, radius, 1, 24, .Blue);
-
-						// TODO:  TEMP!!!
-						if (entry.overlaps.Count > 0)
-						{
-							Raycast(tra.point + position, (scene.GetComponent<Transform>(entry.overlaps[0].other).point - tra.point + position).ToNormalized(), 2084, sys, batch);
-						}
+					case .Rect(let rect): batch.HollowRect(.(tra.point + rect.Position, rect.Size), 1, .Blue);
+					case .Circle(let position, let radius): batch.HollowCircle(tra.point + position, radius, 1, 24, .Blue);
 					}
+
+					for (let overlap in entry.overlaps)
+						batch.HollowCircle(scene.GetComponent<Transform>(overlap.other).point, 4, 1, 4, .Cyan);
 				}
 			}
 		}
 
 		[PerfTrack] // 0.09/0.10 ms before
-		public void TickPostColl(BucketSystem buckSys)
+		public void TickPostColl(BucketSystem buckSys, GridSystem gridSys)
 		{
 			// We assume to be called after movement has taken place, otherwise updating triggers wouldn't make sense
 			// i.e.: (various updates adding force, setting movement) -> collision tick & other movement finalizing things
 			//		 -> trigger tick -> ... (movement & now also contact info fresh for next cycle)
-
-			sys = buckSys;
 
 			for (let e in entities)
 			{
@@ -237,13 +231,33 @@ namespace Dimtoo
 
 								void HandleOverlap(int triggerIndex, int otherColliderIndex, float distance)
 								{
-									// TODO: check obstruction... somehow... (optional)
-									// -> raycasting!
-
 									Debug.Assert((triggerIndex | otherColliderIndex) <= uint8.MaxValue);
+									var trigger = ref trib.triggerEntries[triggerIndex];
+
+									if (trigger.checkObstruction)
+									{
+										Point2 triggerOffset;
+										int range;
+										switch (trigger.trigger.shape)
+										{
+										case .Circle(let position, let radius):
+											triggerOffset = position;
+											range = radius;
+										case .Rect(let rect):
+											triggerOffset = rect.Position;
+											range = Math.Max(rect.Width, rect.Height); // Too much, but we already know we overlap anyway...
+										}
+
+										let origin = tra.point + triggerOffset;
+										let info = Raycast(origin, (traC.point + cob.colliders[otherColliderIndex].rect.Position - origin).ToNormalized(), range, trigger.obstructTag, buckSys, gridSys, scene);
+										if (info.other != .Invalid && info.distance < distance
+											&& (info.other != eCollision || info.other == eCollision && info.otherColliderIndex != otherColliderIndex))
+										{
+											return;
+										}
+									}
 
 									var insert = 0;
-									var trigger = ref trib.triggerEntries[triggerIndex];
 									for (var i = trigger.overlaps.Count - 1; i >= 0; i--)
 									{
 										if (trigger.overlaps[[Unchecked]i].distance <= distance)
@@ -309,26 +323,86 @@ namespace Dimtoo
 			}
 		}
 
-		public static CollisionInfo Raycast(Point2 origin, Vector2 dir, float range, BucketSystem buckSys, Batch2D batch)
+		public static TriggerOverlapInfo Raycast(Point2 origin, Vector2 dir, int range, Mask tagMask, BucketSystem buckSys, GridSystem gridSys, Scene scene)
 		{
-			// what if dir is .Zero? -- or even one axis!
-
-			batch.Line(origin, origin + dir * range, 1, .Red);
+			if (dir == .Zero)
+				return default;
 
 			var currBucket = origin / BucketSystem.BUCKET_SIZE;
 			let oneOverDir = Vector2(1 / dir.X, 1 / dir.Y);
 			let xBucketStep = Math.Sign(dir.X), yBucketStep = Math.Sign(dir.Y);
 			
 			let endBucket = (origin + dir * range).ToRounded() / BucketSystem.BUCKET_SIZE;
-			let stopBucket = endBucket + .(xBucketStep, yBucketStep);
-
-			// TODO: checks one too far sometimes apparently???
-
-			while (currBucket != stopBucket)
+			bool lastBucket = false;
+			TriggerOverlapInfo bestOverlap = .() {
+				distance = float.MaxValue
+			};
+			while (!lastBucket)
 			{
-				// TODO check actually
+				if (currBucket == endBucket)
+					lastBucket = true;
 
-				// test which of the two edges the ray hits, then go that dir
+				// TODO to possibly optimize this, we could try to pass in a list, pre sort entities by distance and only check rays against the ones we already checked nearer to us in the trigger loop
+				for (let e in buckSys.buckets[currBucket])
+				{
+					let traC = scene.GetComponent<Transform>(e);
+					let cob = scene.GetComponent<CollisionBody>(e);
+
+					for (let coll in cob.colliders)
+					{
+						if (tagMask.Overlaps(coll.tag))
+						{
+							let colliderRect = Rect(traC.point + coll.rect.Position, coll.rect.Size);
+
+							if (CheckRayRect(origin, dir, oneOverDir, colliderRect, let newDist)
+								&& newDist < bestOverlap.distance)
+							{
+								Debug.Assert(newDist > 0);
+								bestOverlap = TriggerOverlapInfo()
+									{
+										other = e,
+										otherColliderIndex = (.)@coll.Index,
+										distance = newDist
+									};
+							}
+						}
+					}
+				}
+
+				let bucketBounds = Rect(currBucket.X * BucketSystem.BUCKET_SIZE, currBucket.Y * BucketSystem.BUCKET_SIZE, BucketSystem.BUCKET_SIZE, BucketSystem.BUCKET_SIZE);
+				for (let e in gridSys.entities)
+				{
+					let tra = scene.GetComponent<Transform>(e);
+					let gri = scene.GetComponent<Grid>(e);
+
+					if (//gri.layer TODO layer check actually maybe have obstructionLayer not targetTag that makes so much more sense thanks!
+						!gri.GetBounds(tra.point).Overlaps(bucketBounds))
+						continue;
+
+					(let cellMin, let cellMax) = gri.GetCellBoundsOverlapping(tra.point, bucketBounds);
+					for (var y = cellMin.Y; y < cellMax.Y; y++)
+						for (var x = cellMin.X; x < cellMax.X; x++)
+						{
+							if (!gri.cells[y][x].IsSolid)
+								continue;
+							let tileRect = gri.GetCollider(x, y, tra.point);
+
+							if (CheckRayRect(origin, dir, oneOverDir, tileRect, let newDist)
+								&& newDist < bestOverlap.distance)
+							{
+								Debug.Assert(newDist > 0);
+								bestOverlap = TriggerOverlapInfo()
+									{
+										other = e, // TODO: other type of info here... grid not really specifiable! or not?
+										distance = newDist
+									};
+							}
+						}
+				}
+
+				// Later bucket's hits will only be further away
+				if (bestOverlap.other != .Invalid)
+					return bestOverlap;
 
 				let nextBucketX = currBucket.X + xBucketStep;
 				let nextBucketY = currBucket.Y + yBucketStep;
@@ -339,7 +413,6 @@ namespace Dimtoo
 				let yHitsPlane = CheckRayPlane(origin, dir, .(0, nextBucketYNearPlane), .(0, -yBucketStep), let yPlaneDist);
 				Debug.Assert(xHitsPlane || yHitsPlane);
 
-				batch.HollowRect(.(currBucket * BucketSystem.BUCKET_SIZE, .(BucketSystem.BUCKET_SIZE)), 1, .Red);
 				if (xPlaneDist < yPlaneDist)
 					currBucket.X += xBucketStep;
 				else currBucket.Y += yBucketStep;
@@ -368,12 +441,9 @@ namespace Dimtoo
 			return false;
 		}
 
-		static bool CheckRayRect(Point2 rayOrigin, Vector2 rayDir, Rect rect, out float hitDistance)
+		// TODO: dist sometimes negative, hot not detected somtimes too....
+		static bool CheckRayRect(Point2 rayOrigin, Vector2 rayDir, Vector2 oneOverDir, Rect rect, out float hitDistance)
 		{
-			// TODO rayDir 0 check?
-
-			let oneOverDir = Vector2(1 / rayDir.X, 1 / rayDir.Y);
-
 			float t1 = (rect.Left - rayOrigin.X) * oneOverDir.X;
 			float t2 = (rect.Right - rayOrigin.X) * oneOverDir.X;
 			float t3 = (rect.Top - rayOrigin.Y) * oneOverDir.Y;
@@ -409,7 +479,7 @@ namespace Dimtoo
 		}
 
 		[Optimize]
-		public static Rect MakeColliderBounds(Point2 pos, TriggerList triggers, Mask mask = .All)
+		public static Rect MakeColliderBounds(Point2 pos, TriggerList triggers, Mask tagMask = .All)
 		{
 			var origin = pos;
 			var size = Point2.Zero;
@@ -417,7 +487,7 @@ namespace Dimtoo
 			// Get bounds
 			for (let entry in triggers)
 			{
-				if (!entry.trigger.tag.Overlaps(mask))
+				if (!entry.trigger.tag.Overlaps(tagMask))
 					continue;
 
 				Rect shapeRect;
