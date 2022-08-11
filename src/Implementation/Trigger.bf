@@ -26,9 +26,9 @@ namespace Dimtoo
 	{
 		public Trigger trigger;
 		public bool checkObstruction;
-		public Mask obstructTag = .All;
+		public Mask obstructLayer = .All;
 
-		// Entries are all sorted by distance to trigger center
+		// Entries are all sorted by distance to the entity position
 
 		public SizedList<TriggerOverlapInfo, const 32> overlaps;
 		public SizedList<TriggerOverlapInfo, const 32> prevOverlaps;
@@ -208,9 +208,9 @@ namespace Dimtoo
 											if (!triggerRect.Overlaps(colliderRect))
 												continue;
 
-											let distance = colliderRect.ClampPoint(triggerRect.Center).DistanceTo(triggerRect.Center);
+											let entDist = colliderRect.ClampPoint(tra.point).DistanceTo(tra.point);
 
-											HandleOverlap(@entry.Index, @coll.Index, distance);
+											HandleOverlap(@entry.Index, @coll.Index, entDist);
 										}
 
 								case .Circle(let position, let radius):
@@ -225,7 +225,9 @@ namespace Dimtoo
 											if (distance > radius)
 												continue;
 
-											HandleOverlap(@entry.Index, @coll.Index, distance);
+											let endDist = colliderRect.ClampPoint(tra.point).DistanceTo(tra.point);
+
+											HandleOverlap(@entry.Index, @coll.Index, endDist);
 										}
 								}
 
@@ -236,25 +238,20 @@ namespace Dimtoo
 
 									if (trigger.checkObstruction)
 									{
-										Point2 triggerOffset;
 										int range;
 										switch (trigger.trigger.shape)
 										{
 										case .Circle(let position, let radius):
-											triggerOffset = position;
 											range = radius;
 										case .Rect(let rect):
-											triggerOffset = rect.Position;
 											range = Math.Max(rect.Width, rect.Height); // Too much, but we already know we overlap anyway...
 										}
 
-										let origin = tra.point + triggerOffset;
-										let info = Raycast(origin, (traC.point + cob.colliders[otherColliderIndex].rect.Position - origin).ToNormalized(), range, trigger.obstructTag, buckSys, gridSys, scene);
+										let info = Raycast(tra.point, (traC.point + cob.colliders[otherColliderIndex].rect.Position - tra.point).ToNormalized(), range, trigger.obstructLayer, buckSys, gridSys, scene);
+
 										if (info.other != .Invalid && info.distance < distance
 											&& (info.other != eCollision || info.other == eCollision && info.otherColliderIndex != otherColliderIndex))
-										{
 											return;
-										}
 									}
 
 									var insert = 0;
@@ -323,7 +320,7 @@ namespace Dimtoo
 			}
 		}
 
-		public static TriggerOverlapInfo Raycast(Point2 origin, Vector2 dir, int range, Mask tagMask, BucketSystem buckSys, GridSystem gridSys, Scene scene)
+		public static TriggerOverlapInfo Raycast(Point2 origin, Vector2 dir, int range, Mask layerMask, BucketSystem buckSys, GridSystem gridSys, Scene scene)
 		{
 			if (dir == .Zero)
 				return default;
@@ -343,27 +340,30 @@ namespace Dimtoo
 					lastBucket = true;
 
 				// TODO to possibly optimize this, we could try to pass in a list, pre sort entities by distance and only check rays against the ones we already checked nearer to us in the trigger loop
-				for (let e in buckSys.buckets[currBucket])
+				if (buckSys.buckets.ContainsKey(currBucket))
 				{
-					let traC = scene.GetComponent<Transform>(e);
-					let cob = scene.GetComponent<CollisionBody>(e);
-
-					for (let coll in cob.colliders)
+					for (let e in buckSys.buckets[currBucket])
 					{
-						if (tagMask.Overlaps(coll.tag))
-						{
-							let colliderRect = Rect(traC.point + coll.rect.Position, coll.rect.Size);
+						let traC = scene.GetComponent<Transform>(e);
+						let cob = scene.GetComponent<CollisionBody>(e);
 
-							if (CheckRayRect(origin, dir, oneOverDir, colliderRect, let newDist)
-								&& newDist < bestOverlap.distance)
+						for (let coll in cob.colliders)
+						{
+							if (layerMask.Overlaps(coll.layer))
 							{
-								Debug.Assert(newDist > 0);
-								bestOverlap = TriggerOverlapInfo()
-									{
-										other = e,
-										otherColliderIndex = (.)@coll.Index,
-										distance = newDist
-									};
+								let colliderRect = Rect(traC.point + coll.rect.Position, coll.rect.Size);
+
+								if (CheckRayRect(origin, dir, oneOverDir, colliderRect, let newDist)
+									&& newDist < bestOverlap.distance && newDist >= 0)
+								{
+									Debug.Assert(newDist > 0);
+									bestOverlap = TriggerOverlapInfo()
+										{
+											other = e,
+											otherColliderIndex = (.)@coll.Index,
+											distance = newDist
+										};
+								}
 							}
 						}
 					}
@@ -375,8 +375,8 @@ namespace Dimtoo
 					let tra = scene.GetComponent<Transform>(e);
 					let gri = scene.GetComponent<Grid>(e);
 
-					if (//gri.layer TODO layer check actually maybe have obstructionLayer not targetTag that makes so much more sense thanks!
-						!gri.GetBounds(tra.point).Overlaps(bucketBounds))
+					if (!layerMask.Overlaps(gri.layer)
+						|| !gri.GetBounds(tra.point).Overlaps(bucketBounds))
 						continue;
 
 					(let cellMin, let cellMax) = gri.GetCellBoundsOverlapping(tra.point, bucketBounds);
@@ -388,7 +388,7 @@ namespace Dimtoo
 							let tileRect = gri.GetCollider(x, y, tra.point);
 
 							if (CheckRayRect(origin, dir, oneOverDir, tileRect, let newDist)
-								&& newDist < bestOverlap.distance)
+								&& newDist < bestOverlap.distance && newDist >= 0)
 							{
 								Debug.Assert(newDist > 0);
 								bestOverlap = TriggerOverlapInfo()
@@ -441,7 +441,6 @@ namespace Dimtoo
 			return false;
 		}
 
-		// TODO: dist sometimes negative, hot not detected somtimes too....
 		static bool CheckRayRect(Point2 rayOrigin, Vector2 rayDir, Vector2 oneOverDir, Rect rect, out float hitDistance)
 		{
 			float t1 = (rect.Left - rayOrigin.X) * oneOverDir.X;
@@ -452,17 +451,10 @@ namespace Dimtoo
 			float tmin = Math.Max(Math.Min(t1, t2), Math.Min(t3, t4));
 			float tmax = Math.Min(Math.Max(t1, t2), Math.Max(t3, t4));
 
-			// if tmax < 0, ray (line) is intersecting AABB, but the whole AABB is behind us
-			if (tmax < 0)
+			if (tmax < 0 || tmin < 0
+				|| tmin > tmax)
 			{
-			    hitDistance = tmax;
-			    return false;
-			}
-
-			// if tmin > tmax, ray doesn't intersect AABB
-			if (tmin > tmax)
-			{
-			    hitDistance = tmax;
+			    hitDistance = float.MaxValue;
 			    return false;
 			}
 
