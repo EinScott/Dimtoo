@@ -3,6 +3,14 @@ using System;
 
 namespace Dimtoo
 {
+	static
+	{
+		public static mixin SecondsToTicks(float seconds)
+		{
+			(int)(seconds * 60)
+		}
+	}
+
 	class PixelGame<T> : Game<T> where T : Game
 	{
 		public enum ScalingMode

@@ -11,11 +11,11 @@ namespace Dimtoo
 		[Inline]
 		public this(float lifetime, bool destroyAfterLifetime = true)
 		{
-			this.lifetime = lifetime;
+			this.lifetime = SecondsToTicks!(lifetime);
 			this.destroyAfterLifetime = destroyAfterLifetime;
 		}
 
-		public float lifetime;
+		public int lifetime;
 		public bool destroyAfterLifetime;
 	}
 
@@ -34,7 +34,7 @@ namespace Dimtoo
 				let lit = scene.GetComponent<Lifetime>(e);
 
 				if (lit.lifetime > 0)
-					lit.lifetime -= Time.Delta;
+					lit.lifetime--;
 
 				if (lit.lifetime <= 0 && lit.destroyAfterLifetime)
 					scene.DeferDestroyEntity(e);

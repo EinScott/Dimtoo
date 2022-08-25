@@ -10,7 +10,7 @@ namespace Dimtoo
 	{
 		public int layer = 0;
 		public int frame;
-		public float frameTime = 0;
+		public int frameTicks = 0;
 		public int state = 0;
 		public int nextState = 0;
 		public bool queueNextState = false;
@@ -58,13 +58,13 @@ namespace Dimtoo
 
 				if (sprite.Animations.Length > 0)
 				{
-					spr.frameTime += Time.Delta;
-					while (spr.frameTime > sprite.Frames[spr.frame].Duration)
+					spr.frameTicks++;
+					let durationTicks = SecondsToTicks!((float)sprite.Frames[spr.frame].Duration / 1000);
+					while (spr.frameTicks > durationTicks)
 					{
-						spr.frameTime -= sprite.Frames[spr.frame].Duration;
-						spr.frame++;
+						spr.frameTicks -= durationTicks;
 
-						if (sprite.Animations[spr.state].To < spr.frame)
+						if (sprite.Animations[spr.state].To <= spr.frame)
 						{
 							if (spr.queueNextState)
 							{
@@ -75,6 +75,7 @@ namespace Dimtoo
 
 							spr.frame = sprite.Animations[spr.state].From;
 						}
+						else spr.frame++;
 					}
 				}
 
