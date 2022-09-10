@@ -691,7 +691,7 @@ namespace Dimtoo
 								if (CheckRayRect(origin, dir, oneOverDir, colliderRect, let newDist)
 									&& newDist < bestOverlap.distance && newDist >= 0)
 								{
-									Debug.Assert(newDist > 0);
+									Debug.Assert(newDist >= 0);
 									bestOverlap = TriggerOverlapInfo()
 										{
 											other = e,
@@ -725,7 +725,7 @@ namespace Dimtoo
 							if (CheckRayRect(origin, dir, oneOverDir, tileRect, let newDist)
 								&& newDist < bestOverlap.distance && newDist >= 0)
 							{
-								Debug.Assert(newDist > 0);
+								Debug.Assert(newDist >= 0);
 								bestOverlap = TriggerOverlapInfo()
 									{
 										other = e, // TODO: other type of info here... grid not really specifiable! or not?
@@ -752,6 +752,92 @@ namespace Dimtoo
 					currBucket.X += xBucketStep;
 				else currBucket.Y += yBucketStep;
 			}
+
+			return default;
+		}
+
+		public static TriggerOverlapInfo Rectcast(Rect rect, Vector2 dir, int range, Mask layerMask, BucketSystem buckSys, GridSystem gridSys, Scene scene)
+		{
+			// TODO: this is very similar to CheckMove... also more efficient in theory... maybe use this in there?
+			// OPTIMIZE: COULD cycle through chunks against dir, and break if we found something in a chunk when moving to the next... or even just check a ray with some width instead of a rect of chunks!
+
+			if (dir == .Zero)
+				return default;
+
+			var bounds = rect;
+			let cast = (dir * range).ToRounded();
+			bounds.Size += Point2.Abs(cast);
+			if (cast.X < 0)
+				bounds.X += cast.X;
+			if (cast.Y < 0)
+				bounds.Y += cast.Y;
+
+			TriggerOverlapInfo bestOverlap = .() {
+				distance = float.MaxValue
+			};
+
+			let xMaxBucket = bounds.Right / BucketSystem.BUCKET_SIZE;
+			let yMaxBucket = bounds.Bottom / BucketSystem.BUCKET_SIZE;
+			CHECKENT:for (var y = bounds.Top / BucketSystem.BUCKET_SIZE; y <= yMaxBucket; y++)
+				for (var x = bounds.Left / BucketSystem.BUCKET_SIZE; x <= xMaxBucket; x++)
+				{
+					let bucket = Point2(x, y);
+					if (!buckSys.buckets.ContainsKey(bucket))
+						continue;
+
+					for (let e in buckSys.buckets[bucket])
+					{
+						let cob = scene.GetComponent<CollisionBody>(e);
+						let traC = scene.GetComponent<Transform>(e);
+
+						for (let coll in cob.colliders)
+						{
+							if (layerMask.Overlaps(coll.layer))
+							{
+								let colliderRect = Rect(traC.point + coll.rect.Position, coll.rect.Size);
+
+								if (CheckRects(rect, colliderRect, cast, let hitPercent, let hitEdge))
+								{
+									bestOverlap = TriggerOverlapInfo()
+									{
+										other = e,
+										otherColliderIndex = (.)@coll.Index,
+										distance = ((Vector2)cast * hitPercent).Length
+									};
+								}
+							}
+						}
+					}
+
+					let bucketBounds = Rect(bucket.X * BucketSystem.BUCKET_SIZE, bucket.Y * BucketSystem.BUCKET_SIZE, BucketSystem.BUCKET_SIZE, BucketSystem.BUCKET_SIZE);
+					for (let e in gridSys.entities)
+					{
+						let tra = scene.GetComponent<Transform>(e);
+						let gri = scene.GetComponent<Grid>(e);
+
+						if (!layerMask.Overlaps(gri.layer)
+							|| !gri.GetBounds(tra.point).Overlaps(bucketBounds))
+							continue;
+
+						(let cellMin, let cellMax) = gri.GetCellBoundsOverlapping(tra.point, bucketBounds);
+						for (var cellY = cellMin.Y; cellY < cellMax.Y; cellY++)
+							for (var cellX = cellMin.X; cellX < cellMax.X; cellX++)
+							{
+								if (!gri.cells[cellY][cellX].IsSolid)
+									continue;
+								let tileRect = gri.GetCollider(cellX, cellY, tra.point);
+
+								if (CheckRects(rect, tileRect, cast, let hitPercent, let hitEdge))
+								{
+									bestOverlap = TriggerOverlapInfo()
+									{
+										other = e,
+										distance = ((Vector2)cast * hitPercent).Length
+									};
+								}
+							}
+					}
+				}
 
 			return default;
 		}

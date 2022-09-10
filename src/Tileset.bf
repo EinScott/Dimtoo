@@ -87,10 +87,10 @@ namespace Dimtoo
 		[Inline]
 		public void Draw(Batch2D batch, int frame, int variation, TileCorner corner, Vector2 position, Vector2 scale = .One, float rotation = 0, Color color = .White)
 		{
-			{
+#if DEBUG			
 				Debug.Assert(variations.TryGetValue(corner, let variationCount));
 				Debug.Assert(variationCount > variation);
-			}
+#endif
 
 			let tile = tiles[(uint64)corner.GetHashCode() + ((uint64)variation << 32)];
 			batch.Image(frames[frame].Texture, tile.Clip, position, scale, .Zero, rotation, color);
