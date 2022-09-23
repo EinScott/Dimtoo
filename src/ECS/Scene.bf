@@ -137,7 +137,7 @@ namespace Dimtoo
 		public HashSet<Entity>.Enumerator EnumerateEntities() => entMan.EnumerateEntities();
 
 		[Inline]
-		public void RegisterComponent<T>() where T : struct => compMan.RegisterComponent<T>();
+		public void RegisterComponent<T>(int capacity = MAX_ENTITIES) where T : struct => compMan.RegisterComponent<T>(capacity);
 
 		public void AddComponent<T>(Entity e, T component) where T : struct
 		{

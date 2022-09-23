@@ -21,12 +21,12 @@ namespace Dimtoo
 		}
 
 		[Inline]
-		public void RegisterComponent<T>() where T : struct
+		public void RegisterComponent<T>(int capacity = MAX_ENTITIES) where T : struct
 		{
 			Debug.Assert(!componentArrays.ContainsKey(typeof(T)), "Component type already registered");
 			Debug.Assert(nextType < MAX_COMPONENTS, "Too many components");
 
-			componentArrays.Add(typeof(T), (nextType++, new ComponentArray<T>()));
+			componentArrays.Add(typeof(T), (nextType++, new ComponentArray<T>(capacity)));
 		}
 
 		[Inline]

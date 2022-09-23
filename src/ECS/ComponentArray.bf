@@ -15,14 +15,26 @@ namespace Dimtoo
 
 	class ComponentArray<T> : IComponentArrayBase where T : struct
 	{
-		T[MAX_ENTITIES] components;
-		readonly Dictionary<Entity, int> entityToIndex = new .() ~ delete _;
-		readonly List<Entity> indexToEntity = new .() ~ delete _;
-		int count;
+		Span<T> components;
+		readonly Dictionary<Entity, int> entityToIndex ~ delete _;
+		readonly List<Entity> indexToEntity ~ delete _;
+		int count, capacity;
+
+		[AllowAppend]
+		public this(int capacity = MAX_ENTITIES)
+		{
+			let ptr = append T[capacity]*;
+			components = .(ptr, capacity);
+			this.capacity = capacity;
+
+			let bookkeepingStartCap = (int32)Math.Min(capacity, 64);
+			entityToIndex = new .(bookkeepingStartCap);
+			indexToEntity = new .(bookkeepingStartCap);
+		}
 
 		public void ClearData()
 		{
-			components = .();
+			Array.Clear(components.Ptr, components.Length);
 			entityToIndex.Clear();
 			indexToEntity.Clear();
 			count = 0;
@@ -31,6 +43,7 @@ namespace Dimtoo
 		public void InsertData(Entity e, T component)
 		{
 			Debug.Assert(!entityToIndex.ContainsKey(e), "Component added to the same entity more than once");
+			Debug.Assert(count < capacity, "No more space for components of this type");
 
 			let newIndex = count++;
 			components[newIndex] = component;
@@ -45,6 +58,7 @@ namespace Dimtoo
 		public Span<uint8> ReserveData(Entity e)
 		{
 			Debug.Assert(!entityToIndex.ContainsKey(e), "Component added to the same entity more than once");
+			Debug.Assert(count < capacity, "No more space for components of this type");
 
 			let newIndex = count++;
 

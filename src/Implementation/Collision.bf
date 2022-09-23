@@ -22,12 +22,14 @@ namespace Dimtoo
 	struct CollisionBody
 	{
 		public Vector2 move;
+		public Vector2 resultingMove;
 		public ColliderList colliders;
 
 		public this(ColliderList coll)
 		{
 			move = .Zero;
 			colliders = coll;
+			resultingMove = default;
 		}
 
 		[Inline]
@@ -229,6 +231,7 @@ namespace Dimtoo
 				if (a.move == .Zero)
 				{
 					// Update pos to record subpixel moves
+					aCob.resultingMove = posRemainder - aTra.Remainder;
 					aTra.Remainder = posRemainder;
 
 					if (scene.GetComponentOptional<CollisionMoveFeedback>(e, let collFeedback))
@@ -358,15 +361,16 @@ namespace Dimtoo
 				// - when we move through remainder rounding but cant, we don't theoretically move back due to the remainder getting inverted
 				let hitEdges = moveInfo.myHitEdge | slideInfo.myHitEdge;
 				if ((hitEdges & .Left) > 0)
-					posRemainder.X = -0.499f;
+					posRemainder.X = -0.49999f;
 				else if ((hitEdges & .Right) > 0)
-					posRemainder.X = 0.499f;
+					posRemainder.X = 0.49999f;
 				if ((hitEdges & .Top) > 0)
-					posRemainder.Y = -0.499f;
+					posRemainder.Y = -0.49999f;
 				else if ((hitEdges & .Bottom) > 0)
-					posRemainder.Y = 0.499f;
+					posRemainder.Y = 0.49999f;
 
 				// Actually move
+				aCob.resultingMove = a.move + (posRemainder - aTra.Remainder);
 				aTra.point = aPos + a.move;
 				aTra.Remainder = posRemainder;
 			}
