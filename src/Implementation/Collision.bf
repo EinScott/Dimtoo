@@ -667,7 +667,7 @@ namespace Dimtoo
 			var currBucket = origin / BucketSystem.BUCKET_SIZE;
 			let oneOverDir = Vector2(1 / dir.X, 1 / dir.Y);
 			let xBucketStep = Math.Sign(dir.X), yBucketStep = Math.Sign(dir.Y);
-			
+
 			let endBucket = (origin + dir * range).ToRounded() / BucketSystem.BUCKET_SIZE;
 			bool lastBucket = false;
 			TriggerOverlapInfo bestOverlap = .() {
@@ -843,7 +843,7 @@ namespace Dimtoo
 					}
 				}
 
-			return default;
+			return bestOverlap.distance != float.MaxValue ? bestOverlap : default;
 		}
 
 		static bool CheckRayPlane(Point2 rayOrigin, Vector2 rayDir, Point2 planePoint, Vector2 planeNormal, out float hitDistance)
