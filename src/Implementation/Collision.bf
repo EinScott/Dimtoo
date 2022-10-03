@@ -661,13 +661,15 @@ namespace Dimtoo
 
 		public static TriggerOverlapInfo Raycast(Point2 origin, Vector2 dir, int range, Mask layerMask, BucketSystem buckSys, GridSystem gridSys, Scene scene)
 		{
+			// TODO: this sometimes falsely reports hits??? -> for example when using it for path validation
+
 			if (dir == .Zero)
 				return default;
 
 			var currBucket = origin / BucketSystem.BUCKET_SIZE;
 			let oneOverDir = Vector2(1 / dir.X, 1 / dir.Y);
 			let xBucketStep = Math.Sign(dir.X), yBucketStep = Math.Sign(dir.Y);
-			
+
 			let endBucket = (origin + dir * range).ToRounded() / BucketSystem.BUCKET_SIZE;
 			bool lastBucket = false;
 			TriggerOverlapInfo bestOverlap = .() {
@@ -693,7 +695,7 @@ namespace Dimtoo
 								let colliderRect = Rect(traC.point + coll.rect.Position, coll.rect.Size);
 
 								if (CheckRayRect(origin, dir, oneOverDir, colliderRect, let newDist)
-									&& newDist < bestOverlap.distance && newDist >= 0)
+									&& newDist < bestOverlap.distance && newDist >= 0 && newDist <= range)
 								{
 									Debug.Assert(newDist >= 0);
 									bestOverlap = TriggerOverlapInfo()
@@ -727,7 +729,7 @@ namespace Dimtoo
 							let tileRect = gri.GetCollider(x, y, tra.point);
 
 							if (CheckRayRect(origin, dir, oneOverDir, tileRect, let newDist)
-								&& newDist < bestOverlap.distance && newDist >= 0)
+								&& newDist < bestOverlap.distance && newDist >= 0 && newDist <= range)
 							{
 								Debug.Assert(newDist >= 0);
 								bestOverlap = TriggerOverlapInfo()
@@ -802,12 +804,14 @@ namespace Dimtoo
 
 								if (CheckRects(rect, colliderRect, cast, let hitPercent, let hitEdge))
 								{
-									bestOverlap = TriggerOverlapInfo()
-									{
-										other = e,
-										otherColliderIndex = (.)@coll.Index,
-										distance = ((Vector2)cast * hitPercent).Length
-									};
+									let dist = ((Vector2)cast * hitPercent).Length;
+									if (dist <= range)
+										bestOverlap = TriggerOverlapInfo()
+										{
+											other = e,
+											otherColliderIndex = (.)@coll.Index,
+											distance = dist
+										};
 								}
 							}
 						}
@@ -833,17 +837,19 @@ namespace Dimtoo
 
 								if (CheckRects(rect, tileRect, cast, let hitPercent, let hitEdge))
 								{
-									bestOverlap = TriggerOverlapInfo()
-									{
-										other = e,
-										distance = ((Vector2)cast * hitPercent).Length
-									};
+									let dist = ((Vector2)cast * hitPercent).Length;
+									if (dist <= range)
+										bestOverlap = TriggerOverlapInfo()
+										{
+											other = e,
+											distance = dist
+										};
 								}
 							}
 					}
 				}
 
-			return default;
+			return bestOverlap.distance != float.MaxValue ? bestOverlap : default;
 		}
 
 		static bool CheckRayPlane(Point2 rayOrigin, Vector2 rayDir, Point2 planePoint, Vector2 planeNormal, out float hitDistance)
