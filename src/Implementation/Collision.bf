@@ -762,6 +762,7 @@ namespace Dimtoo
 			return default;
 		}
 
+		// distance returned does not include the rect size, it's the amount by which the rect could move in that dir.
 		public static TriggerOverlapInfo Rectcast(Rect rect, Vector2 dir, int range, Mask layerMask, BucketSystem buckSys, GridSystem gridSys, Scene scene)
 		{
 			// TODO: this is very similar to CheckMove... also more efficient in theory... maybe use this in there?
