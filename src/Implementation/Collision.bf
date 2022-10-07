@@ -659,7 +659,7 @@ namespace Dimtoo
 			}
 		}
 
-		public static TriggerOverlapInfo Raycast(Point2 origin, Vector2 dir, int range, Mask layerMask, BucketSystem buckSys, GridSystem gridSys, Scene scene)
+		public static TriggerOverlapInfo Raycast(Point2 origin, Vector2 dir, int range, Mask layerMask, BucketSystem buckSys, GridSystem gridSys, Scene scene, Entity ignore = .Invalid)
 		{
 			// TODO: this sometimes falsely reports hits??? -> for example when using it for path validation
 
@@ -685,6 +685,9 @@ namespace Dimtoo
 				{
 					for (let e in buckSys.buckets[currBucket])
 					{
+						if (e == ignore)
+							continue;
+
 						let traC = scene.GetComponent<Transform>(e);
 						let cob = scene.GetComponent<CollisionBody>(e);
 
@@ -763,7 +766,7 @@ namespace Dimtoo
 		}
 
 		// distance returned does not include the rect size, it's the amount by which the rect could move in that dir.
-		public static TriggerOverlapInfo Rectcast(Rect rect, Vector2 dir, int range, Mask layerMask, BucketSystem buckSys, GridSystem gridSys, Scene scene)
+		public static TriggerOverlapInfo Rectcast(Rect rect, Vector2 dir, int range, Mask layerMask, BucketSystem buckSys, GridSystem gridSys, Scene scene, Entity ignore = .Invalid)
 		{
 			// TODO: this is very similar to CheckMove... also more efficient in theory... maybe use this in there?
 			// OPTIMIZE: COULD cycle through chunks against dir, and break if we found something in a chunk when moving to the next... or even just check a ray with some width instead of a rect of chunks!
@@ -794,14 +797,17 @@ namespace Dimtoo
 
 					for (let e in buckSys.buckets[bucket])
 					{
+						if (e == ignore)
+							continue;
+
 						let cob = scene.GetComponent<CollisionBody>(e);
-						let traC = scene.GetComponent<Transform>(e);
+						let tra = scene.GetComponent<Transform>(e);
 
 						for (let coll in cob.colliders)
 						{
 							if (layerMask.Overlaps(coll.layer))
 							{
-								let colliderRect = Rect(traC.point + coll.rect.Position, coll.rect.Size);
+								let colliderRect = Rect(tra.point + coll.rect.Position, coll.rect.Size);
 
 								if (CheckRects(rect, colliderRect, cast, let hitPercent, let hitEdge))
 								{
@@ -817,38 +823,37 @@ namespace Dimtoo
 							}
 						}
 					}
-
-					let bucketBounds = Rect(bucket.X * BucketSystem.BUCKET_SIZE, bucket.Y * BucketSystem.BUCKET_SIZE, BucketSystem.BUCKET_SIZE, BucketSystem.BUCKET_SIZE);
-					for (let e in gridSys.entities)
-					{
-						let tra = scene.GetComponent<Transform>(e);
-						let gri = scene.GetComponent<Grid>(e);
-
-						if (!layerMask.Overlaps(gri.layer)
-							|| !gri.GetBounds(tra.point).Overlaps(bucketBounds))
-							continue;
-
-						(let cellMin, let cellMax) = gri.GetCellBoundsOverlapping(tra.point, bucketBounds);
-						for (var cellY = cellMin.Y; cellY < cellMax.Y; cellY++)
-							for (var cellX = cellMin.X; cellX < cellMax.X; cellX++)
-							{
-								if (!gri.cells[cellY][cellX].IsSolid)
-									continue;
-								let tileRect = gri.GetCollider(cellX, cellY, tra.point);
-
-								if (CheckRects(rect, tileRect, cast, let hitPercent, let hitEdge))
-								{
-									let dist = ((Vector2)cast * hitPercent).Length;
-									if (dist <= range)
-										bestOverlap = TriggerOverlapInfo()
-										{
-											other = e,
-											distance = dist
-										};
-								}
-							}
-					}
 				}
+
+			for (let e in gridSys.entities)
+			{
+				let tra = scene.GetComponent<Transform>(e);
+				let gri = scene.GetComponent<Grid>(e);
+
+				if (!gri.GetBounds(tra.point).Overlaps(bounds)
+					|| !layerMask.Overlaps(gri.layer))
+					continue;
+
+				(let cellMin, let cellMax) = gri.GetCellBoundsOverlapping(tra.point, bounds);
+				for (var cellY = cellMin.Y; cellY < cellMax.Y; cellY++)
+					for (var cellX = cellMin.X; cellX < cellMax.X; cellX++)
+					{
+						if (!gri.cells[cellY][cellX].IsSolid)
+							continue;
+						let tileRect = gri.GetCollider(cellX, cellY, tra.point);
+
+						if (CheckRects(rect, tileRect, cast, let hitPercent, let hitEdge))
+						{
+							let dist = ((Vector2)cast * hitPercent).Length;
+							if (dist <= range)
+								bestOverlap = TriggerOverlapInfo()
+								{
+									other = e,
+									distance = dist
+								};
+						}
+					}
+			}
 
 			return bestOverlap.distance != float.MaxValue ? bestOverlap : default;
 		}
