@@ -9,13 +9,13 @@ namespace Dimtoo
 	struct Lifetime
 	{
 		[Inline]
-		public this(float lifetime, bool destroyAfterLifetime = true)
+		public this(uint32 lifetime, bool destroyAfterLifetime = true)
 		{
-			this.lifetime = SecondsToTicks!(lifetime);
+			this.lifetime = lifetime;
 			this.destroyAfterLifetime = destroyAfterLifetime;
 		}
 
-		public int lifetime;
+		public uint32 lifetime;
 		public bool destroyAfterLifetime;
 	}
 
