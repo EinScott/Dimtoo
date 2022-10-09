@@ -25,8 +25,7 @@ namespace Dimtoo
 	struct TriggerEntry
 	{
 		public Trigger trigger;
-		public bool checkObstruction;
-		public Mask obstructLayer = .All;
+		public Mask obstructLayer = .None;
 
 		// Entries are all sorted by distance to the entity position
 
@@ -148,7 +147,7 @@ namespace Dimtoo
 			}
 		}
 
-		[PerfTrack] // 0.09/0.10 ms before
+		[PerfTrack]
 		public void TickPostColl(BucketSystem buckSys, GridSystem gridSys)
 		{
 			// We assume to be called after movement has taken place, otherwise updating triggers wouldn't make sense
@@ -160,10 +159,10 @@ namespace Dimtoo
 				let tra = scene.GetComponent<Transform>(e);
 				let trib = scene.GetComponent<TriggerBody>(e);
 
-				for (var record in ref trib.triggerEntries)
+				for (var entry in ref trib.triggerEntries)
 				{
-					record.prevOverlaps = record.overlaps;
-					record.overlaps.Clear();
+					entry.prevOverlaps = entry.overlaps;
+					entry.overlaps.Clear();
 				}
 
 				let triggerBounds = MakeColliderBounds(tra.point, trib.triggerEntries);
@@ -191,7 +190,9 @@ namespace Dimtoo
 
 							CHECKTRIG:for (let entry in trib.triggerEntries)
 							{
-								for (var info in ref trib.triggerEntries[@entry.Index].overlaps)
+								// An entity might be in multiple buckets at once,
+								// so we might process it twice, which we at least dont want to record
+								for (var info in entry.overlaps)
 									if (info.other == eCollision)
 										continue CHECKTRIG;
 
@@ -236,7 +237,7 @@ namespace Dimtoo
 									Debug.Assert((triggerIndex | otherColliderIndex) <= uint8.MaxValue);
 									var trigger = ref trib.triggerEntries[triggerIndex];
 
-									if (trigger.checkObstruction)
+									if (trigger.obstructLayer != .None)
 									{
 										int range;
 										switch (trigger.trigger.shape)
@@ -247,9 +248,9 @@ namespace Dimtoo
 											range = Math.Max(rect.Width, rect.Height); // Too much, but we already know we overlap anyway...
 										}
 
-										let info = CollisionSystem.Raycast(tra.point, (traC.point + cob.colliders[otherColliderIndex].rect.Position - tra.point).ToNormalized(), range, trigger.obstructLayer, buckSys, gridSys, scene);
+										let info = CollisionSystem.Raycast(tra.point, (traC.point + cob.colliders[otherColliderIndex].rect.Position - tra.point).ToNormalized(), range, trigger.obstructLayer, buckSys, gridSys, scene, e);
 
-										if (info.other != .Invalid && info.distance < distance
+										if (info.other != .Invalid && info.distance <= distance
 											&& (info.other != eCollision || info.other == eCollision && info.otherColliderIndex != otherColliderIndex))
 											return;
 									}
