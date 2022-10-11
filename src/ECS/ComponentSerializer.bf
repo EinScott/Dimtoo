@@ -232,7 +232,7 @@ namespace Dimtoo
 
 		public void SerializeGroup(Entity[] entities, String buffer, bool exactEntity = true)
 		{
-			let writer = scope BonWriter(buffer);
+			let writer = scope BonWriter(buffer, env.serializeFlags.HasFlag(.Verbose));
 			let startLen = Serialize.Start(writer);
 
 			serializedEntities = exactEntity ? .() : entities;
