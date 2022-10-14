@@ -44,7 +44,10 @@ namespace Dimtoo
 				// Put in buckets!
 				let cob = scene.GetComponent<CollisionBody>(e);
 				let tra = scene.GetComponent<Transform>(e);
-				let bounds = CollisionSystem.MakeColliderBounds(tra.point, cob.colliders);
+
+				// TODO Not sure if we should have separate buckets for tags vs layers at some point...
+				// -> just needs the one, trigger just the other, seldomly both...
+				let bounds = CollisionSystem.MakeColliderBounds(tra.point, cob.colliders, .All, .All);
 
 				let xMaxBucket = bounds.Right / BUCKET_SIZE;
 				let yMaxBucket = bounds.Bottom / BUCKET_SIZE;
