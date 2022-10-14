@@ -47,6 +47,8 @@ namespace Dimtoo
 				let spr = scene.GetComponent<SpriteState>(e);
 				let tra = scene.GetComponent<Transform>(e);
 
+				// TODO does not take into consideration scaled or rotated sprites...
+
 				let sprite = spr.sprite.Asset;
 				var localBounds = sprite.Bounds;
 				localBounds.Position += tra.point;

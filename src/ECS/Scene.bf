@@ -54,7 +54,7 @@ namespace Dimtoo
 		//internal readonly VarStorageManager stoMan = new .() ~ delete _;
 		protected readonly ComponentSerializer s = new .(this) ~ delete _;
 
-		readonly List<Entity> deferEntityDestroy = new .() ~ delete _;
+		readonly HashSet<Entity> deferEntityDestroy = new .() ~ delete _;
 
 		public Camera2D camFocus;
 
@@ -108,8 +108,10 @@ namespace Dimtoo
 		[Inline]
 		public Result<void> CreateSpecificEntitiy(Entity e) => entMan.CreateSpecificEntity(e);
 
+		[Inline]
 		public void DeferDestroyEntity(Entity e)
 		{
+			Debug.Assert(entMan.EntityLives(e));
 			deferEntityDestroy.Add(e);
 		}
 

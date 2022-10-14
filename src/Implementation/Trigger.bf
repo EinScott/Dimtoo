@@ -332,8 +332,9 @@ namespace Dimtoo
 		[Optimize]
 		public static Rect MakeColliderBounds(Point2 pos, TriggerList triggers, Mask tagMask = .All)
 		{
-			var origin = pos;
+			var origin = Point2.Zero;
 			var size = Point2.Zero;
+			bool first = true;
 
 			// Get bounds
 			for (let entry in triggers)
@@ -350,18 +351,34 @@ namespace Dimtoo
 
 				let boxOrig = pos + shapeRect.Position;
 
-				// Leftmost corner
-				if (boxOrig.X < origin.X)
-					origin.X = boxOrig.X;
-				if (boxOrig.Y < origin.Y)
-					origin.Y = boxOrig.Y;
+				if (first)
+				{
+					origin = boxOrig;
+					first = false;
+				}
+				else
+				{
+					// TopLeft corner shift
+					if (boxOrig.X < origin.X)
+					{
+						size.X += origin.X - boxOrig.X;
+						origin.X = boxOrig.X;
+					}
+					if (boxOrig.Y < origin.Y)
+					{
+						size.Y += origin.Y - boxOrig.Y;
+						origin.Y = boxOrig.Y;
+					}
+				}
 
-				// Size
-				let boxSize = shapeRect.Size;
-				if (boxOrig.X + boxSize.X > origin.X + size.X)
-					size.X = boxSize.X;
-				if (boxOrig.Y + boxSize.Y > origin.Y + size.Y)
-					size.Y = boxSize.Y;
+				// BottomRight corner shift
+				let boxRight = boxOrig.X + shapeRect.Width;
+				if (boxRight > origin.X + size.X)
+					size.X = boxRight - origin.X;
+
+				let boxBottom = boxOrig.Y + shapeRect.Height;
+				if (boxBottom > origin.Y + size.Y)
+					size.Y = boxBottom - origin.Y;
 			}
 
 			return .(origin, size);
