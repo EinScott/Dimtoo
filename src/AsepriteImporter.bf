@@ -166,7 +166,14 @@ namespace Dimtoo
 	{
 		public int tileSizeX;
 		public int tileSizeY;
-		public List<TileCorner> tiles ~ DeleteNotNull!(_);
+		public List<TilesetEntry> tiles ~ DeleteNotNull!(_);
+	}
+
+	[BonTarget]
+	struct TilesetEntry
+	{
+		public TileCorner corner;
+		public uint8 variations;
 	}
 
 	[RegisterImporter]
@@ -179,7 +186,7 @@ namespace Dimtoo
 
 		public override Result<void> Load(StringView name, Span<uint8> data)
 		{
-			let corners = scope List<(TileCorner corner, UPoint2 spriteOffset)>();
+			List<TilesetEntry> corners;
 			UPoint2 tileSize;
 			let s = scope ArrayStream(data);
 			{
@@ -190,6 +197,8 @@ namespace Dimtoo
 
 				let count = sr.Read<uint32>();
 
+				corners = scope:: .(count);
+
 				for (let i < count)
 				{
 					Tile[4] tiles;
@@ -197,21 +206,15 @@ namespace Dimtoo
 					tiles[1] = (.)sr.Read<uint8>();
 					tiles[2] = (.)sr.Read<uint8>();
 					tiles[3] = (.)sr.Read<uint8>();
-					corners.Add((TileCorner{tiles = tiles}, .Zero));
+					corners.Add(.() {
+						corner = TileCorner{tiles = tiles},
+						variations = sr.Read<uint8>()
+					});
 				}
 			}
 
 			let ase = scope Aseprite();
 			Try!(ase.Parse(s));
-
-			int iCorner = 0;
-			for (let y < ase.Height / tileSize.Y)
-				for (let x < ase.Width / tileSize.X)
-				{
-					if (iCorner >= corners.Count)
-						break;
-					corners[iCorner++].spriteOffset = UPoint2(x, y) * tileSize;
-				}
 
 			let celMap = scope Bitmap(ase.Width, ase.Height);
 			for (let layer in ase.Layers)
@@ -282,7 +285,7 @@ namespace Dimtoo
 				LogErrorReturn!("AsepriteTileImporter: Error reading ase file content");
 			defer delete data;
 
-			ArrayStream s = scope .(data.Count + sizeof(uint32) * 3 + tileData.tiles.Count * sizeof(uint32));
+			ArrayStream s = scope .(data.Count + sizeof(uint32) * 3 + tileData.tiles.Count * sizeof(uint8) * 5);
 			{
 				Serializer sr = scope .(s);
 
@@ -291,12 +294,13 @@ namespace Dimtoo
 
 				sr.Write((uint32)tileData.tiles.Count);
 
-				for (let corner in tileData.tiles)
+				for (let tile in tileData.tiles)
 				{
-					sr.Write((uint8)corner.tiles[0]);
-					sr.Write((uint8)corner.tiles[1]);
-					sr.Write((uint8)corner.tiles[2]);
-					sr.Write((uint8)corner.tiles[3]);
+					sr.Write((uint8)tile.corner.tiles[0]);
+					sr.Write((uint8)tile.corner.tiles[1]);
+					sr.Write((uint8)tile.corner.tiles[2]);
+					sr.Write((uint8)tile.corner.tiles[3]);
+					sr.Write((uint8)tile.variations);
 				}
 
 				if (sr.HadError)

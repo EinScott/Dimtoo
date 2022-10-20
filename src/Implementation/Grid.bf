@@ -203,6 +203,7 @@ namespace Dimtoo
 	{
 		public int renderLayer;
 		public bool renderDepthSorted;
+		public Point2 drawOffset;
 		public Asset<Tileset> tileset;
 	}
 	
@@ -271,7 +272,7 @@ namespace Dimtoo
 					for (var y = cellMin.Y; y < cellMax.Y + 1; y++)
 					{
 						if (layer.renderDepthSorted)
-							batch.SetLayer((.)layer.renderLayer + (((float)originPos.Y - cam.Bottom - cam.Viewport.Y / 2 + (y + 0.75f) * gri.cellSize.Y) / cam.Viewport.Y)); // TODO: maybe make the 1.5f variable?
+							batch.SetLayer((.)layer.renderLayer + (((float)originPos.Y - cam.Bottom - (float)cam.Viewport.Y / 2 + (y + 0.45f) * gri.cellSize.Y) / cam.Viewport.Y)); // TODO: maybe make the 1.5f variable?
 
 						for (var x = cellMin.X; x < cellMax.X + 1; x++)
 						{
@@ -288,14 +289,14 @@ namespace Dimtoo
 								(int)(((noise.GetNoise(x, y) + 1) / 2) * (variationCount - 0.001f))
 							}
 
-							let tilePos = originPos + .(x, y) * gri.cellSize;
+							let tilePos = originPos + .(x, y) * gri.cellSize + layer.drawOffset;
 							if (tileset.HasTile(corner, let variationCount))
 								tileset.Draw(batch, 0, GetVariation!(variationCount), corner, tilePos);
 							else do
 							{
 								// Assemble from separate tiles?
 
-								if (corner.tiles[0] != .None && corner.tiles[1] == .None && corner.tiles[2] == .None && corner.tiles[3] != .None)
+								/*if (corner.tiles[0] != .None && corner.tiles[1] == .None && corner.tiles[2] == .None && corner.tiles[3] != .None)
 								{
 									let topLeft = TileCorner{tiles = .(corner.tiles[0],)};
 									let bottomRight = TileCorner{tiles = .(default, default, default, corner.tiles[3])};
@@ -318,10 +319,10 @@ namespace Dimtoo
 										tileset.Draw(batch, 0, GetVariation!(brVariationCount), bottomLeft, tilePos);
 										break;
 									}
-								}
+								}*/
 
 								// Nothing found
-								batch.Rect(.(tilePos, tileset.TileSize), .Magenta);
+								//batch.Rect(.(tilePos, tileset.TileSize), .Magenta);
 							}
 						}
 					}

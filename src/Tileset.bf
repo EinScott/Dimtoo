@@ -9,9 +9,9 @@ namespace Dimtoo
 	[BonTarget]
 	struct TileCorner : IHashable
 	{
-		// 0   1
-		//   x
-		// 2   3
+		// 0 | 1
+		// - + -
+		// 2 | 3
 		public Tile[4] tiles;
 
 		public int GetHashCode()
@@ -41,7 +41,7 @@ namespace Dimtoo
 		Dictionary<TileCorner, uint8> variations = new .() ~ delete _;
 		Dictionary<uint64, TileSprite> tiles = new .() ~ delete _;
 
-		public this(Span<Frame> frameSpan, Span<(TileCorner corner, UPoint2 spriteOffset)> tileSpan, Span<(String name, Animation anim)> animSpan, UPoint2 tileSize)
+		public this(Span<Frame> frameSpan, Span<TilesetEntry> tileSpan, Span<(String name, Animation anim)> animSpan, UPoint2 tileSize)
 		{
 			Debug.Assert(frameSpan.Length > 0, "Sprite has to have at least one frame");
 
@@ -50,20 +50,23 @@ namespace Dimtoo
 
 			TileSize = tileSize;
 
-			for (let tup in tileSpan)
+			for (let entry in tileSpan)
 			{
 				// Update variation count
-				uint8 variation = 0;
-				if (variations.TryGetValue(tup.corner, let val))
+				uint8 startVariation = 0;
+				if (variations.TryGetValue(entry.corner, let count))
 				{
-					variations[tup.corner] = val + 1;
-					variation = val;
+					variations[entry.corner] = count + entry.variations;
+					startVariation = count;
 				}
-				else variations.Add(tup.corner, 1);
+				else variations.Add(entry.corner, entry.variations);
 
 				// Put combination in tiles lookup
-				tiles.Add(((uint64)tup.corner.GetHashCode() + ((uint64)variation << 32)),
-					TileSprite(Rect((.)tup.spriteOffset, (.)TileSize)));
+				for (let i < entry.variations)
+				{
+					tiles.Add(((uint64)entry.corner.GetHashCode() + ((uint64)(startVariation + i) << 32)),
+						TileSprite(Rect(i * (.)TileSize.X, @entry.Index * (.)TileSize.Y, (.)TileSize.X, (.)TileSize.Y)));
+				}
 			}
 
 			for (let tup in animSpan)

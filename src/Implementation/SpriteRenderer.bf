@@ -8,7 +8,8 @@ namespace Dimtoo
 	[BonTarget,BonPolyRegister]
 	struct SpriteState
 	{
-		public int layer = 0;
+		public int16 layer = 0;
+		public Point2 drawOffset = default;
 		public int frame;
 		public int frameTicks = 0;
 		public int state = 0;
@@ -81,7 +82,7 @@ namespace Dimtoo
 					}
 				}
 
-				sprite.Draw(batch, spr.frame, tra.point, tra.scale, tra.rotation);
+				sprite.Draw(batch, spr.frame, tra.point + spr.drawOffset, tra.scale, tra.rotation);
 			}
 		}
 	}
