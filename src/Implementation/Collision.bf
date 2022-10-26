@@ -409,10 +409,10 @@ namespace Dimtoo
 			Entity eHit = 0;
 			CollisionInfo bInfo = .();
 
-			let xMaxBucket = moverPathRect.Right / BucketSystem.BUCKET_SIZE;
-			let yMaxBucket = moverPathRect.Bottom / BucketSystem.BUCKET_SIZE;
-			CHECKENT:for (var y = moverPathRect.Top / BucketSystem.BUCKET_SIZE; y <= yMaxBucket; y++)
-				for (var x = moverPathRect.Left / BucketSystem.BUCKET_SIZE; x <= xMaxBucket; x++)
+			let maxBucket = BucketSystem.WorldToBucket(moverPathRect.BottomRight);
+			let minBucket = BucketSystem.WorldToBucket(moverPathRect.TopLeft);
+			CHECKENT:for (var y = minBucket.Y; y <= maxBucket.Y; y++)
+				for (var x = minBucket.X; x <= maxBucket.X; x++)
 				{
 					let bucket = Point2(x, y);
 					if (!buckSys.buckets.ContainsKey(bucket))
@@ -661,16 +661,14 @@ namespace Dimtoo
 
 		public static TriggerOverlapInfo Raycast(Point2 origin, Vector2 dir, int range, Mask layerMask, BucketSystem buckSys, GridSystem gridSys, Scene scene, Entity ignore = .Invalid)
 		{
-			// TODO: this sometimes falsely reports hits??? -> for example when using it for path validation
-
 			if (dir == .Zero)
 				return default;
 
-			var currBucket = origin / BucketSystem.BUCKET_SIZE;
+			var currBucket = BucketSystem.WorldToBucket(origin);
 			let oneOverDir = Vector2(1 / dir.X, 1 / dir.Y);
 			let xBucketStep = Math.Sign(dir.X), yBucketStep = Math.Sign(dir.Y);
 
-			let endBucket = (origin + dir * range).ToRounded() / BucketSystem.BUCKET_SIZE;
+			let endBucket = BucketSystem.WorldToBucket((origin + dir * range).ToRounded());
 			bool lastBucket = false;
 			TriggerOverlapInfo bestOverlap = .() {
 				distance = float.MaxValue
@@ -748,6 +746,8 @@ namespace Dimtoo
 				if (bestOverlap.other != .Invalid)
 					return bestOverlap;
 
+				// TODO issue with putting planes wrong due to negative coordinates...
+
 				let nextBucketX = currBucket.X + xBucketStep;
 				let nextBucketY = currBucket.Y + yBucketStep;
 				let nextBucketXNearPlane = xBucketStep > 0 ? nextBucketX * BucketSystem.BUCKET_SIZE : nextBucketX * BucketSystem.BUCKET_SIZE + BucketSystem.BUCKET_SIZE - 1;
@@ -786,10 +786,10 @@ namespace Dimtoo
 				distance = float.MaxValue
 			};
 
-			let xMaxBucket = bounds.Right / BucketSystem.BUCKET_SIZE;
-			let yMaxBucket = bounds.Bottom / BucketSystem.BUCKET_SIZE;
-			CHECKENT:for (var y = bounds.Top / BucketSystem.BUCKET_SIZE; y <= yMaxBucket; y++)
-				for (var x = bounds.Left / BucketSystem.BUCKET_SIZE; x <= xMaxBucket; x++)
+			let maxBucket = BucketSystem.WorldToBucket(bounds.BottomRight);
+			let minBucket = BucketSystem.WorldToBucket(bounds.TopLeft);
+			CHECKENT:for (var y = minBucket.Y; y <= maxBucket.Y; y++)
+				for (var x = minBucket.X; x <= maxBucket.X; x++)
 				{
 					let bucket = Point2(x, y);
 					if (!buckSys.buckets.ContainsKey(bucket))

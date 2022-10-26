@@ -167,10 +167,10 @@ namespace Dimtoo
 
 				let triggerBounds = MakeColliderBounds(tra.point, trib.triggerEntries);
 				let triggerMask = MakeCombinedTagMask(trib.triggerEntries);
-				let xMaxBucket = triggerBounds.Right / BucketSystem.BUCKET_SIZE;
-				let yMaxBucket = triggerBounds.Bottom / BucketSystem.BUCKET_SIZE;
-				CHECKENT:for (var y = triggerBounds.Top / BucketSystem.BUCKET_SIZE; y <= yMaxBucket; y++)
-					for (var x = triggerBounds.Left / BucketSystem.BUCKET_SIZE; x <= xMaxBucket; x++)
+				let maxBucket = BucketSystem.WorldToBucket(triggerBounds.BottomRight);
+				let minBucket = BucketSystem.WorldToBucket(triggerBounds.TopLeft);
+				CHECKENT:for (var y = minBucket.Y; y <= maxBucket.Y; y++)
+					for (var x = minBucket.X; x <= maxBucket.X; x++)
 					{
 						let bucket = Point2(x, y);
 						if (!buckSys.buckets.ContainsKey(bucket))
