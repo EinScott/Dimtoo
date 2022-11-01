@@ -205,12 +205,18 @@ namespace Dimtoo
 		public bool renderDepthSorted;
 		public Point2 drawOffset;
 		public Asset<Tileset> tileset;
+		public bool tryAssembleMissingCombinations;
 	}
 	
 	[BonTarget,BonPolyRegister]
 	struct TileRenderer
 	{
 		public TilerLayerRenderInfo[2] layers;
+
+		// 0 1 2
+		// 7 x 3
+		// 6 5 4
+		public Entity[8] connectingGrids = default;
 
 		public this(params Asset<Tileset>[2] tilesets)
 		{
@@ -253,9 +259,7 @@ namespace Dimtoo
 				let tir = scene.GetComponent<TileRenderer>(e);
 
 				let pos = tra.point;
-				(let cellMin, let cellMax) = gri.GetCellBoundsOverlapping(pos, cam.CameraRect);
-
-				// TODO: animations, variants
+				// TODO: animations
 
 				for (let t < tir.layers.Count)
 				{
@@ -267,22 +271,92 @@ namespace Dimtoo
 
 					if (!layer.renderDepthSorted)
 						batch.SetLayer((.)layer.renderLayer);
-
+					
 					let originPos = pos + gri.offset - (gri.cellSize / 2);
-					for (var y = cellMin.Y; y < cellMax.Y + 1; y++)
+
+					var clipRect = cam.CameraRect;
+					clipRect.Position -= layer.drawOffset;
+					(let cellMin, let cellMax) = gri.GetCellBoundsOverlapping(pos, clipRect);
+					for (var y = cellMin.Y; y <= cellMax.Y; y++)
 					{
 						if (layer.renderDepthSorted)
-							batch.SetLayer((.)layer.renderLayer + (((float)originPos.Y - cam.Bottom - (float)cam.Viewport.Y / 2 + (y + 0.45f) * gri.cellSize.Y) / cam.Viewport.Y)); // TODO: maybe make the 1.5f variable?
+							batch.SetLayer((.)layer.renderLayer + (((float)originPos.Y - cam.Bottom - (float)cam.Viewport.Y / 2 + (y + 0.45f) * gri.cellSize.Y) / cam.Viewport.Y));
 
-						for (var x = cellMin.X; x < cellMax.X + 1; x++)
+						for (var x = cellMin.X; x <= cellMax.X; x++)
 						{
-							TileCorner corner = .{
-								tiles = .(
-									x - 1 >= 0 && y - 1 >= 0 ? gri.cells[y - 1][x - 1] : .None,
-									x < Grid.MAX_CELL_AXIS && y - 1 >= 0 ? gri.cells[y - 1][x] : .None,
-									x - 1 >= 0 && y < Grid.MAX_CELL_AXIS ? gri.cells[y][x - 1] : .None,
-									x < Grid.MAX_CELL_AXIS && y < Grid.MAX_CELL_AXIS ? gri.cells[y][x] : .None)
-							};
+							mixin GridExists(Entity gridEnt, out Grid* gri)
+							{
+								gri = ?;
+								gridEnt != .Invalid && scene.GetComponentOptional<Grid>(gridEnt, out gri)
+							}
+
+							let xMinTileIsInBounds = x - 1 >= 0, yMinTileIsInBounds = y - 1 >= 0,
+								xMaxTileIsInBounds = x < Grid.MAX_CELL_AXIS, yMaxTileIsInBounds = y < Grid.MAX_CELL_AXIS;
+
+							// TODO: when connected dont render max tiles twice... the other will also do it...
+
+							TileCorner corner = default;
+							if (xMinTileIsInBounds)
+							{
+								if (yMinTileIsInBounds)
+									corner.tiles[0] = gri.cells[y - 1][x - 1];
+								else if (GridExists!(tir.connectingGrids[1], let neigborGri))
+									corner.tiles[0] = neigborGri.cells[Grid.MAX_CELL_AXIS - 1][x - 1];
+
+								if (yMaxTileIsInBounds)
+									corner.tiles[2] = gri.cells[y][x - 1];
+								else if (GridExists!(tir.connectingGrids[5], let neigborGri))
+									corner.tiles[2] = neigborGri.cells[0][x - 1];
+							}
+							else
+							{
+								if (yMinTileIsInBounds)
+								{
+									if (GridExists!(tir.connectingGrids[7], let neigborGri))
+										corner.tiles[0] = neigborGri.cells[y - 1][Grid.MAX_CELL_AXIS - 1];
+								}
+								else if (GridExists!(tir.connectingGrids[0], let neigborGri))
+									corner.tiles[0] = neigborGri.cells[Grid.MAX_CELL_AXIS - 1][Grid.MAX_CELL_AXIS - 1];
+
+								if (yMaxTileIsInBounds)
+								{
+									if (GridExists!(tir.connectingGrids[7], let neigborGri))
+										corner.tiles[2] = neigborGri.cells[y][Grid.MAX_CELL_AXIS - 1];
+								}
+								else if (GridExists!(tir.connectingGrids[6], let neigborGri))
+									corner.tiles[2] = neigborGri.cells[0][Grid.MAX_CELL_AXIS - 1];
+							}
+
+							if (xMaxTileIsInBounds)
+							{
+								if (yMinTileIsInBounds)
+									corner.tiles[1] = gri.cells[y - 1][x];
+								else if (GridExists!(tir.connectingGrids[1], let neigborGri))
+									corner.tiles[1] = neigborGri.cells[Grid.MAX_CELL_AXIS - 1][x];
+
+								if (yMaxTileIsInBounds)
+									corner.tiles[3] = gri.cells[y][x];
+								else if (GridExists!(tir.connectingGrids[5], let neigborGri))
+									corner.tiles[3] = neigborGri.cells[0][x];
+							}
+							else
+							{
+								if (yMinTileIsInBounds)
+								{
+									if (GridExists!(tir.connectingGrids[3], let neigborGri))
+										corner.tiles[1] = neigborGri.cells[y - 1][0];
+								}
+								else if (GridExists!(tir.connectingGrids[7], let neigborGri))
+									corner.tiles[1] = neigborGri.cells[Grid.MAX_CELL_AXIS - 1][0];
+
+								if (yMaxTileIsInBounds)
+								{
+									if (GridExists!(tir.connectingGrids[3], let neigborGri))
+										corner.tiles[3] = neigborGri.cells[y][0];
+								}
+								else if (GridExists!(tir.connectingGrids[4], let neigborGri))
+									corner.tiles[3] = neigborGri.cells[0][0];
+							}
 
 							mixin GetVariation(int variationCount)
 							{
@@ -292,11 +366,11 @@ namespace Dimtoo
 							let tilePos = originPos + .(x, y) * gri.cellSize + layer.drawOffset;
 							if (tileset.HasTile(corner, let variationCount))
 								tileset.Draw(batch, 0, GetVariation!(variationCount), corner, tilePos);
-							else do
+							else if(layer.tryAssembleMissingCombinations) do
 							{
 								// Assemble from separate tiles?
 
-								/*if (corner.tiles[0] != .None && corner.tiles[1] == .None && corner.tiles[2] == .None && corner.tiles[3] != .None)
+								if (corner.tiles[0] != .None && corner.tiles[1] == .None && corner.tiles[2] == .None && corner.tiles[3] != .None)
 								{
 									let topLeft = TileCorner{tiles = .(corner.tiles[0],)};
 									let bottomRight = TileCorner{tiles = .(default, default, default, corner.tiles[3])};
@@ -319,10 +393,7 @@ namespace Dimtoo
 										tileset.Draw(batch, 0, GetVariation!(brVariationCount), bottomLeft, tilePos);
 										break;
 									}
-								}*/
-
-								// Nothing found
-								//batch.Rect(.(tilePos, tileset.TileSize), .Magenta);
+								}
 							}
 						}
 					}
