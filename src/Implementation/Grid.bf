@@ -96,6 +96,14 @@ namespace Dimtoo
 			return (cellMin, cellMax);
 		}
 
+		public (Point2 cellMin, Point2 cellMax) GetAsCellBounds(Point2 pos, Rect clipRect) mut
+		{
+			let cellMin = Point2.Max((clipRect.Position - pos - offset) / cellSize, .Zero);
+			let cellMax = Point2.Min(((clipRect.Position - pos - offset) + clipRect.Size) / cellSize + .One, .(MAX_CELL_AXIS));
+
+			return (cellMin, cellMax);
+		}
+
 		[Inline]
 		public Rect GetCellBounds() mut
 		{
@@ -206,6 +214,7 @@ namespace Dimtoo
 		public Point2 drawOffset;
 		public Asset<Tileset> tileset;
 		public bool tryAssembleMissingCombinations;
+		public bool alwaysRenderNonSolidTiles;
 	}
 	
 	[BonTarget,BonPolyRegister]
@@ -276,7 +285,7 @@ namespace Dimtoo
 
 					var clipRect = cam.CameraRect;
 					clipRect.Position -= layer.drawOffset;
-					(let cellMin, let cellMax) = gri.GetCellBoundsOverlapping(pos, clipRect);
+					(let cellMin, let cellMax) = layer.alwaysRenderNonSolidTiles ? gri.GetAsCellBounds(pos, clipRect) : gri.GetCellBoundsOverlapping(pos, clipRect);
 					for (var y = cellMin.Y; y <= cellMax.Y; y++)
 					{
 						if (layer.renderDepthSorted)
