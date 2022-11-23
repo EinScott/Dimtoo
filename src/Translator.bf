@@ -26,7 +26,7 @@ namespace Dimtoo
 		{
 			if (strings.TryGet(key, ?, let val))
 				return val;
-			return "not found";
+			return key;
 		}
 	}
 }
