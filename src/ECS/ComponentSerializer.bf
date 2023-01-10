@@ -123,7 +123,7 @@ namespace Dimtoo
 			else entity.ToString(writer.outStr);
 		}
 
-		Result<void> DeserializeEntity(BonReader reader, ValueView val, BonEnvironment env)
+		Result<void> DeserializeEntity(BonReader reader, ValueView val, BonEnvironment env, DeserializeFieldState state)
 		{
 			if (reader.IsNull())
 			{
@@ -167,12 +167,12 @@ namespace Dimtoo
 			}
 		}
 
-		Result<void> DeserializeAsset(BonReader reader, ValueView val, BonEnvironment env)
+		Result<void> DeserializeAsset(BonReader reader, ValueView val, BonEnvironment env, DeserializeFieldState state)
 		{
 			if (reader.IsNull())
 			{
 				// Invalid
-				Try!(Deserialize.MakeDefault(reader, val, env));
+				Try!(Deserialize.MakeDefault(reader, val, env, true));
 			}
 			else if (val.type.GetField("name") case .Ok(let nameField))
 			{
@@ -196,9 +196,9 @@ namespace Dimtoo
 			thing.Assign(scene.managedStrings.Add(.. new String()));
 		}
 
-		public void SerializeScene(String buffer, bool exactEntity = true)
+		public void SerializeScene(String buffer, bool exactEntity = true, bool format = false)
 		{
-			let writer = scope BonWriter(buffer, env.serializeFlags.HasFlag(.Verbose));
+			let writer = scope BonWriter(buffer, format);
 			let startLen = Serialize.Start(writer);
 
 			using (writer.ArrayBlock())

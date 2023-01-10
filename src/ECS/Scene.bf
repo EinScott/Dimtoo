@@ -71,19 +71,19 @@ namespace Dimtoo
 		}
 
 		[Inline]
-		public void SerializeScene(String buffer)
+		public void SerializeScene(String buffer, bool format = false)
 		{
 			Debug.Assert(deferEntityDestroy.Count == 0);
 
-			s.SerializeScene(buffer, true);
+			s.SerializeScene(buffer, true, format);
 		}
 
 		[Inline]
-		public void SerializeSceneAsGroup(String buffer)
+		public void SerializeSceneAsGroup(String buffer, bool format = false)
 		{
 			Debug.Assert(deferEntityDestroy.Count == 0);
 
-			s.SerializeScene(buffer, false);
+			s.SerializeScene(buffer, false, format);
 		}
 
 		[Inline]

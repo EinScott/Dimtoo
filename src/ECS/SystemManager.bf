@@ -7,7 +7,8 @@ namespace Dimtoo
 	abstract class ComponentSystem
 	{
 		public readonly Span<Type> signatureTypes;
-		public readonly HashSet<Entity> entities = new .() ~ delete _;
+		public readonly HashSet<Entity> entitySet = new .() ~ delete _;
+		public readonly List<Entity> entities = new .() ~ delete _;
 		public Scene scene;
 
 	}
@@ -24,7 +25,10 @@ namespace Dimtoo
 		public void ClearSystemEntities()
 		{
 			for (let tup in systems.Values)
+			{
 				tup.system.entities.Clear();
+				tup.system.entitySet.Clear();
+			}
 		}
 
 		[Inline]
@@ -49,7 +53,10 @@ namespace Dimtoo
 		public void OnEntityDestroyed(Entity e)
 		{
 			for (let tup in systems.Values)
+			{
 				tup.system.entities.Remove(e);
+				tup.system.entitySet.Remove(e);
+			}
 		}
 
 		[Inline]
@@ -59,8 +66,28 @@ namespace Dimtoo
 			{
 				// Add and remove from systems according to signature mask
 				if ((tup.signature & sig) == tup.signature)
-					tup.system.entities.Add(e);
-				else tup.system.entities.Remove(e);
+				{
+					if (!tup.system.entities.Contains(e))
+					{
+						// Maintain list sort, higher entity ids later
+						int insertIdx = tup.system.entities.Count;
+						for (let ent in tup.system.entities)
+						{
+							if ((uint16)ent > (uint16)e)
+							{
+								insertIdx = @ent.Index;
+								break;
+							}
+						}
+						tup.system.entities.Insert(insertIdx, e);
+						tup.system.entitySet.Add(e);
+					}
+				}
+				else
+				{
+					if (tup.system.entitySet.Remove(e))
+						tup.system.entities.Remove(e);
+				}
 			}
 		}
 	}
