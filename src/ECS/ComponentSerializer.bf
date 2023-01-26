@@ -50,7 +50,7 @@ namespace Dimtoo
 			env.typeHandlers.Add(typeof(Asset<>), ((.)new => SerializeAsset, (.)new => DeserializeAsset));
 			//env.typeHandlers.Add(typeof(VarDataRef<>), ((.)new => SerializeVarDataRef, (.)new => DeserializeVarDataRef));
 		}
-		
+
 		/*void SerializeVarDataRef(BonWriter writer, ValueView val, BonEnvironment env)
 		{
 			let start = GetValField!<int>(val, "start");
@@ -95,10 +95,12 @@ namespace Dimtoo
 			return reader.ArrayBlockEnd();
 		}*/
 
-		void SerializeEntity(BonWriter writer, ValueView val, BonEnvironment env)
+		void SerializeEntity(BonWriter writer, ValueView val, BonEnvironment env, SerializeValueState state)
 		{
 			Entity entity = val.Get<Entity>();
-			if (serializedEntities.Ptr != null && entity != .Invalid)
+			if (entity == .Invalid)
+				writer.Null();
+			else if (serializedEntities.Ptr != null)
 			{
 				// If we don't keep the id's of entities, convert those to ref indices in the save data
 				// entities.Ptr will only not be null, when we do not keep entity ids
@@ -123,12 +125,13 @@ namespace Dimtoo
 			else entity.ToString(writer.outStr);
 		}
 
-		Result<void> DeserializeEntity(BonReader reader, ValueView val, BonEnvironment env, DeserializeFieldState state)
+		Result<void> DeserializeEntity(BonReader reader, ValueView val, BonEnvironment env, DeserializeValueState state)
 		{
 			if (reader.IsNull())
 			{
-				// Invalid
-				val.Assign(0);
+				val.Assign(Entity.Invalid);
+
+				Try!(reader.ConsumeEmpty());
 			}
 			else
 			{
@@ -153,7 +156,7 @@ namespace Dimtoo
 			return .Ok;
 		}
 
-		void SerializeAsset(BonWriter writer, ValueView val, BonEnvironment env)
+		void SerializeAsset(BonWriter writer, ValueView val, BonEnvironment env, SerializeValueState state)
 		{
 			if (val.type.GetField("name") case .Ok(let nameField))
 			{
@@ -167,12 +170,14 @@ namespace Dimtoo
 			}
 		}
 
-		Result<void> DeserializeAsset(BonReader reader, ValueView val, BonEnvironment env, DeserializeFieldState state)
+		Result<void> DeserializeAsset(BonReader reader, ValueView val, BonEnvironment env, DeserializeValueState state)
 		{
 			if (reader.IsNull())
 			{
 				// Invalid
 				Try!(Deserialize.MakeDefault(reader, val, env, true));
+
+				Try!(reader.ConsumeEmpty());
 			}
 			else if (val.type.GetField("name") case .Ok(let nameField))
 			{

@@ -51,13 +51,19 @@ namespace Dimtoo
 				// TODO does not take into consideration scaled or rotated sprites...
 
 				let sprite = spr.sprite.Asset;
-				var localBounds = sprite.Bounds;
+				var localBounds = sprite?.Bounds ?? .SizeOne;
 				localBounds.Position += tra.point;
 				if (!cam.CameraRect.Overlaps(localBounds))
 					continue;
 
 				let depth = (float)(tra.point.Y - cam.Bottom - (float)cam.Viewport.Y / 2) / cam.Viewport.Y;
 				batch.SetLayer((float)spr.layer + depth);
+
+				if (sprite == null)
+				{
+					batch.Rect(tra.point + spr.drawOffset - .(16), .(32), .White);
+					continue;
+				}
 
 				if (sprite.Animations.Length > 0)
 				{
