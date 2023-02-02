@@ -9,6 +9,7 @@ namespace Dimtoo
 	struct Transform
 	{
 		public Point2 point;
+		[BonInclude]
 		Vector2 remainder;
 
 		public Vector2 scale;
