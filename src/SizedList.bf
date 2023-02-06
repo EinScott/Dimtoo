@@ -257,5 +257,13 @@ namespace Dimtoo
 		{
 			return Span<T>(&arr[0], count).GetEnumerator();
 		}
+
+		public void Set(T[Size] array, int fillCount) mut
+		{
+			Debug.Assert((uint)fillCount <= (uint)Size);
+
+			arr = array;
+			count = fillCount;
+		}
 	}
 }
